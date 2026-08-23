@@ -1,0 +1,105 @@
+-- | Trade Wars adaptoru — SABLON YOK, yalnizca veri ve saf fonksiyonlar.
+--
+-- Bu modul yayinlanan kanonik belgelerin NORMATIF tanimidir. Java backend
+-- bunu bayt bayt aynalamak zorundadir; Daml kopyasinin var olma sebebi
+-- reveal'in ledger uzerinde kontrol edilebilmesi ve kodlamanin tek bir
+-- normatif kaynaginin bulunmasidir.
+--
+-- Giris belgesi oynanistan ONCE sabitlenir ve digest'i yazma 1'de
+-- @GameStake.entryDigest@ alanina girer. Icinde giris fiyat vektorunun
+-- tamami (kaynak ve zaman damgasiyla) bulunur — boylece piyasa hareket
+-- ettikten sonra giris fiyatlari geriye donuk uydurulamaz.
+module ArCCade.GameSdk.Games.TradeWars where
+
+import ArCCade.GameSdk.Digest
+
+-- | Oyun kodu. @GameStake.gameCode@ alanina yazilir; SDK bunu yorumlamaz.
+gameCode : Text
+gameCode = "trade-wars-v4"
+
+data PricePoint = PricePoint
+  with
+    symbol : Text
+    price : Decimal
+    source : Text
+    asOf : Time
+  deriving (Eq, Show)
+
+data AssetAllocation = AssetAllocation
+  with
+    symbol : Text
+    allocationPercent : Decimal
+  deriving (Eq, Show)
+
+data TradeWarsEntry = TradeWarsEntry
+  with
+    cycleId : Text
+    tier : Text
+    virtualBalance : Decimal
+    allocations : [AssetAllocation]
+    entryPrices : [PricePoint]
+  deriving (Eq, Show)
+
+data TradeWarsOutcome = TradeWarsOutcome
+  with
+    cycleId : Text
+    exitPrices : [PricePoint]
+    virtualPnl : Decimal
+    virtualPnlPercent : Decimal
+    xpAwarded : Decimal
+    returnedAmount : Decimal
+    forfeitedAmount : Decimal
+  deriving (Eq, Show)
+
+-- | Fiyat noktasinin kanonik gosterimi. Listeler icinde kullanildigi icin
+-- kendisi de bir kayit belgesi olarak kodlanir.
+canonPricePoint : PricePoint -> Text
+canonPricePoint p =
+  canonFields
+    [ ("as-of", canonTime p.asOf)
+    , ("price", canonDecimal p.price)
+    , ("source", canonText p.source)
+    , ("symbol", canonText p.symbol)
+    ]
+
+canonAllocation : AssetAllocation -> Text
+canonAllocation a =
+  canonFields
+    [ ("allocation-percent", canonDecimal a.allocationPercent)
+    , ("symbol", canonText a.symbol)
+    ]
+
+-- | Yayinlanan giris belgesi. Ucuncu taraf bu metnin baytlari uzerinde duz
+-- sha256 calistirarak @entryDigest@'i yeniden uretir.
+entryDocument : TradeWarsEntry -> Text
+entryDocument e =
+  canonDocument "arccade-trade-wars-entry" 1
+    [ ("allocations", canonList (map canonAllocation e.allocations))
+    , ("cycle-id", canonText e.cycleId)
+    , ("entry-prices", canonList (map canonPricePoint e.entryPrices))
+    , ("game-code", canonText gameCode)
+    , ("tier", canonText e.tier)
+    , ("virtual-balance", canonDecimal e.virtualBalance)
+    ]
+
+entryDigest : TradeWarsEntry -> Text
+entryDigest = textDigest . entryDocument
+
+-- | Yayinlanan sonuc belgesi. Bu belge ASLA saklanmaz; yalnizca digest'i
+-- @GameStake_Settle@'a gecirilir ve parayi oynatan islemin exercise
+-- node'unda yasar.
+outcomeDocument : TradeWarsOutcome -> Text
+outcomeDocument o =
+  canonDocument "arccade-trade-wars-outcome" 1
+    [ ("cycle-id", canonText o.cycleId)
+    , ("exit-prices", canonList (map canonPricePoint o.exitPrices))
+    , ("forfeited-amount", canonDecimal o.forfeitedAmount)
+    , ("game-code", canonText gameCode)
+    , ("returned-amount", canonDecimal o.returnedAmount)
+    , ("virtual-pnl", canonDecimal o.virtualPnl)
+    , ("virtual-pnl-percent", canonDecimal o.virtualPnlPercent)
+    , ("xp-awarded", canonDecimal o.xpAwarded)
+    ]
+
+outcomeDigest : TradeWarsOutcome -> Text
+outcomeDigest = textDigest . outcomeDocument

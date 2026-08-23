@@ -1,0 +1,9 @@
+# Daml build output and package cache. .daml/dist holds the built DAR, which is
+# a build artifact — the vetted package is identified by its hash on the ledger,
+# not by a file in the repo.
+.daml/
+*.dar
+
+node_modules/
+.DS_Store
+*.log

@@ -1,0 +1,120 @@
+-- | Commitment semasi: @arccade-sdk-digest-v1/sha256@.
+--
+-- Tek mekanizma var, iki degil: bir yuk KANONIK METIN BELGESINE donusturulur
+-- ve commitment o metnin sha256'sidir.
+--
+-- Bu tercih tasiyici:
+--
+--   (a) Ucuncu taraf, arCCade'in yayinladigi baytlar uzerinde duz @sha256@
+--       calistirarak dogrular. Kutuphane yok, yapisal gezinme yok.
+--   (b) Pre-image bir @Text@ oldugu icin @GameStake_Settle@ onu choice
+--       argumani olarak alip digest'i LEDGER UZERINDE yeniden hesaplayabilir
+--       ve uyusmazligi reddeder. Yani commitment kayit altina alinmakla
+--       kalmaz, ledger tarafindan ZORLANIR.
+--
+-- Alan adlari ASCII [a-zA-Z0-9-] olmak zorundadir; siralama boylece diller
+-- arasi belirsizlige dusmez. Alanlar ADA GORE SIRALANIR, dolayisiyla alan
+-- sirasi belgenin parcasi degildir ve sonraki bir surumde eklenen alan v1
+-- digest'ini sessizce degistiremez. Her belge kendi semasini ve surumunu
+-- tasir; iki farkli yuk turu alanlari cakissa bile ayni digest'i uretmez.
+module ArCCade.GameSdk.Digest where
+
+import DA.Crypto.Text (sha256, toHex)
+import DA.List (sortOn)
+import DA.Text qualified as T
+
+import ArCCade.GameSdk.Time (epochMicros)
+
+-- | Sema kimligi. Digest'in ilk bileseni; surum atlamalarinda degisir.
+schemePrefix : Text
+schemePrefix = "arccade-sdk-digest-v1"
+
+-- | Genel kodlama: @\<tag\>:\<uzunluk\>:\<deger\>@.
+--
+-- Uzunluk UNICODE KOD NOKTASI cinsindendir (Daml @DA.Text.length@;
+-- Python @len(str)@; Java __codePointCount__ kullanmak ZORUNDA, UTF-16
+-- birimi sayan @String.length@ degil).
+--
+-- Uzunluk oneki kodlamayi injektif yapar: icerik ayraclari taklit edemez.
+canon : Text -> Text -> Text
+canon tag value = tag <> ":" <> show (T.length value) <> ":" <> value
+
+canonText : Text -> Text
+canonText = canon "t"
+
+canonInt : Int -> Text
+canonInt i = canon "i" (show i)
+
+-- | Tutarlar ASLA islenmis @Decimal@ olarak hash'lenmez — Decimal
+-- bicimlendirmesi baska bir dilin tesadufen eslestigi kanonik bir bicim
+-- degildir. Tamsayi 1e-10 birimine cevrilir.
+canonDecimal : Decimal -> Text
+canonDecimal d = canon "d" (show (amountUnits d))
+
+canonBool : Bool -> Text
+canonBool b = canon "b" (if b then "true" else "false")
+
+-- | Zaman her zaman epoch'tan beri TAMSAYI MIKROSANIYE; ISO metni degil.
+canonTime : Time -> Text
+canonTime t = canon "m" (show (epochMicros t))
+
+-- | Namespace parmak izi dahil tam party kimligi.
+canonParty : Party -> Text
+canonParty p = canon "p" (partyToText p)
+
+canonOptional : (a -> Text) -> Optional a -> Text
+canonOptional _ None = canon "o" ""
+canonOptional f (Some x) = canon "o" (f x)
+
+-- | Liste: eleman sayisi da kodlanir, elemanlar @|@ ile birlestirilir.
+-- Elemanlar cagiran tarafindan zaten kanonik hale getirilmis olmalidir.
+canonList : [Text] -> Text
+canonList xs = canon "l" (show (length xs) <> ":" <> T.intercalate "|" xs)
+
+-- | Kayit: alanlar ADA GORE siralanir, her biri @k:...:ad=deger;@ olur.
+-- Degerler cagiran tarafindan zaten kanonik hale getirilmis olmalidir.
+canonFields : [(Text, Text)] -> Text
+canonFields kvs =
+  canon "r" (T.implode [ canon "k" k <> "=" <> v <> ";" | (k, v) <- sortOn fst kvs ])
+
+-- | Tam belge: sema oneki + sema adi + sema surumu + siralanmis alanlar.
+canonDocument : Text -> Int -> [(Text, Text)] -> Text
+canonDocument schema version kvs =
+  schemePrefix <> "|" <> canonText schema <> canonInt version <> canonFields kvs
+
+-- | Belgenin commitment'i: kanonik metnin sha256'si (64 karakter, kucuk harf hex).
+documentDigest : Text -> Int -> [(Text, Text)] -> Text
+documentDigest schema version kvs = textDigest (canonDocument schema version kvs)
+
+-- | Hazir kanonik metnin digest'i. @GameStake_Settle@ bunu, kendisine
+-- argumanla verilen pre-image uzerinde calistirip saklanan digest ile
+-- karsilastirir.
+--
+-- DIKKAT — Daml'in @DA.Crypto.Text.sha256@ fonksiyonu rastgele metni DEGIL,
+-- bir HEX DIZESINI girdi olarak alir ve o dizenin cozdugu baytlari hash'ler.
+-- Dogrudan metin verilirse calisma zamaninda
+-- @GeneralError: Message argument is not a hex string@ ile patlar (derleme
+-- asamasinda yakalanmaz). Bu yuzden metin once @toHex@ ile UTF-8 baytlarina
+-- cevrilir.
+--
+-- Bunun yan etkisi tam olarak istedigimiz seydir: sonuc, yayinlanan belgenin
+-- HAM BAYTLARININ sha256'sidir. Ucuncu taraf dosyaya duz @sha256sum@
+-- calistirarak ayni degeri elde eder — Daml'e, bu pakete ya da herhangi bir
+-- kutuphaneye ihtiyac duymadan.
+textDigest : Text -> Text
+textDigest t = sha256 (toHex t)
+
+-- | Tutar -> tamsayi 1e-10 birimi, gidis-donus guvenligiyle.
+--
+-- Sessizce hassasiyet kaybetmek ya da tasmak yerine hata verir. Temsil
+-- edilebilir bant tam olarak +/-922337203.6854775807 — bir CC stake'i
+-- bunun cok altindadir.
+--
+-- @truncate@ sifira dogru yuvarlar; Java @BigDecimal.setScale(0, DOWN)@ ve
+-- JS @BigInt@ ayni davranir, dolayisiyla negatiflerde de mutabakat vardir.
+amountUnits : Decimal -> Int
+amountUnits d =
+  let u = truncate (d * 1e10)
+  in if intToDecimal u / 1e10 == d
+       then u
+       else error ("arccade-sdk-digest-v1: tutar 1e-10 birimine kayipsiz cevrilemedi: " <> show d)

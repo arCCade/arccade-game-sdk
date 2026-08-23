@@ -1,0 +1,59 @@
+-- | Test mock'lari.
+--
+-- @MockLockedHolding@, Splice'in @LockedAmulet@'inin imzaci yapisini ve
+-- @Holding@ arayuz ornegini AYNALAR. Boylece custody dogrulamasi gercek CC
+-- olmadan test edilebilir.
+--
+-- Aynalanan sey onemli: @LockedAmulet@'in imzacilari @lock.holders@ ARTI
+-- amulet'in imzacilaridir (dso, owner). Mock da venue'yu (kilit tutucusu)
+-- imzaci yapar — cunku settlement'in kilidi CEKEBILMESI tam olarak buna
+-- baglidir ve testin gercek kisiti yeniden uretmesi gerekir.
+module Test.GameSdk.Mocks where
+
+import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.MetadataV1 qualified as Metadata
+
+template MockLockedHolding
+  with
+    registry : Party
+      -- ^ Gercek dunyada DSO.
+    owner : Party
+    lockHolders : [Party]
+    instrumentId : Holding.InstrumentId
+    amount : Decimal
+    expiresAt : Optional Time
+    context : Optional Text
+  where
+    -- LockedAmulet'i aynalar: registry + owner + kilit tutuculari.
+    signatory registry, owner, lockHolders
+    observer lockHolders
+
+    interface instance Holding.Holding for MockLockedHolding where
+      view = Holding.HoldingView with
+        owner
+        instrumentId
+        amount
+        lock = Some Holding.Lock with
+          holders = lockHolders
+          expiresAt
+          expiresAfter = None
+          context
+        meta = Metadata.emptyMetadata
+
+-- | Kilitsiz holding — "kilit yok" durumunun reddedildigini test etmek icin.
+template MockFreeHolding
+  with
+    registry : Party
+    owner : Party
+    instrumentId : Holding.InstrumentId
+    amount : Decimal
+  where
+    signatory registry, owner
+
+    interface instance Holding.Holding for MockFreeHolding where
+      view = Holding.HoldingView with
+        owner
+        instrumentId
+        amount
+        lock = None
+        meta = Metadata.emptyMetadata

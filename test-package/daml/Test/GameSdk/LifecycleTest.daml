@@ -1,0 +1,292 @@
+-- | Yasam dongusu testleri: iki yazmalik dongu, slot kisiti, cooldown,
+-- custody kaniti, digest zorlamasi ve oyuncunun koşulsuz cikis yolu.
+module Test.GameSdk.LifecycleTest where
+
+import DA.Time (seconds)
+import Daml.Script
+
+import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.MetadataV1 qualified as Metadata
+
+import ArCCade.GameSdk.Cycle
+import ArCCade.GameSdk.Digest (textDigest)
+import ArCCade.GameSdk.Time
+import ArCCade.GameSdk.Types
+
+import Test.GameSdk.Fixture
+import Test.GameSdk.Mocks
+
+-- | Kilitli holding mock'unu, sartlarla TUTARLI olacak sekilde yaratir.
+mkLock : Parties -> StakeTerms -> Script (ContractId Holding.Holding)
+mkLock p terms = do
+  cid <- submitMulti [p.registry, p.player, p.venue] [] do
+    createCmd MockLockedHolding with
+      registry = p.registry
+      owner = p.player
+      lockHolders = terms.lockHolders
+      instrumentId = terms.instrumentId
+      amount = terms.stakeAmount
+      expiresAt = Some terms.lockExpiresAt
+      context = Some terms.custodyTag
+  pure (toInterfaceContractId @Holding.Holding cid)
+
+-- | Tam dongu: commit -> (sure gecer) -> settle. Slot geri gelir, sayaclar artar.
+fullCycle : Script ()
+fullCycle = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  entCid <- mkEntitlement p venueCid
+
+  now <- getTime
+  let cycleId = "tw-0001"
+  let terms = mkTerms p cycleId sampleEntryDigest now 3600 100.0 0.5
+  lockCid <- mkLock p terms
+
+  stakeCid <- submitMulti [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"
+      cycleId
+      terms
+      entryDigest = sampleEntryDigest
+      stakeMeta = Metadata.emptyMetadata
+
+  -- Asgari dongu suresi dolsun.
+  passTime (seconds 15)
+
+  let outcomeDoc = "outcome-document-v1"
+  newEntCid <- submitMulti [p.operator, p.venue, p.player] [] do
+    exerciseCmd stakeCid GameStake_Settle with
+      disposition = ReturnedInFull
+      returnedAmount = 100.0
+      forfeitedAmount = 0.0
+      payoutAmount = 0.0
+      outcomeDigest = textDigest outcomeDoc
+      revealedOutcome = Some outcomeDoc
+      revealedEntry = None
+      custodyRef = Some (HoldingRef lockCid)
+      settlementMeta = Metadata.emptyMetadata
+
+  ent <- queryContractId p.operator newEntCid
+  case ent of
+    Some e -> do
+      assertMsg "dongu sayaci artmali" (e.cyclesCompleted == 1)
+      assertMsg "toplam stake artmali" (e.lifetimeStaked == 100.0)
+      assertMsg "cooldown ileri alinmali" (e.nextEligibleAt > now)
+    None -> abort "geri verilen entitlement bulunamadi"
+
+-- | Ayni slot uzerinde ikinci es zamanli dongu LEDGER tarafindan reddedilir.
+concurrencyEnforced : Script ()
+concurrencyEnforced = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  entCid <- mkEntitlement p venueCid
+  now <- getTime
+  let terms1 = mkTerms p "tw-a" sampleEntryDigest now 3600 100.0 0.5
+
+  _ <- submitMulti [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "tw-a"; terms = terms1
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+
+  -- Ikinci commit ayni (artik arsivlenmis) entitlement'i tuketmeye calisir.
+  let terms2 = mkTerms p "tw-b" sampleEntryDigest now 3600 100.0 0.5
+  submitMultiMustFail [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "tw-b"; terms = terms2
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+
+-- | Custody kaniti zorunluyken referanssiz settlement reddedilir.
+custodyProofRequired : Script ()
+custodyProofRequired = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  entCid <- mkEntitlement p venueCid
+  now <- getTime
+  let terms = mkTerms p "tw-c" sampleEntryDigest now 3600 100.0 0.5
+  stakeCid <- submitMulti [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "tw-c"; terms
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+  passTime (seconds 15)
+  submitMustFail p.operator do
+    exerciseCmd stakeCid GameStake_Settle with
+      disposition = ReturnedInFull; returnedAmount = 100.0; forfeitedAmount = 0.0
+      payoutAmount = 0.0; outcomeDigest = textDigest "x"
+      revealedOutcome = None; revealedEntry = None
+      custodyRef = None
+      settlementMeta = Metadata.emptyMetadata
+
+-- | Kilit YANLIS etiketi tasiyorsa settlement reddedilir.
+-- Bu, "venue yanlis etiket yazarsa o stake'i kullanilamaz hale getirir"
+-- ozelliginin testidir.
+custodyTagMismatch : Script ()
+custodyTagMismatch = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  entCid <- mkEntitlement p venueCid
+  now <- getTime
+  let terms = mkTerms p "tw-d" sampleEntryDigest now 3600 100.0 0.5
+  -- Kilit BASKA bir dongunun etiketiyle yaratiliyor.
+  let wrongTerms = terms with custodyTag = custodyTagFor "tw-BASKA" sampleEntryDigest
+  lockCid <- mkLock p wrongTerms
+
+  stakeCid <- submitMulti [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "tw-d"; terms
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+  passTime (seconds 15)
+  submitMultiMustFail [p.operator, p.venue, p.player] [] do
+    exerciseCmd stakeCid GameStake_Settle with
+      disposition = ReturnedInFull; returnedAmount = 100.0; forfeitedAmount = 0.0
+      payoutAmount = 0.0; outcomeDigest = textDigest "x"
+      revealedOutcome = None; revealedEntry = None
+      custodyRef = Some (HoldingRef lockCid)
+      settlementMeta = Metadata.emptyMetadata
+
+-- | Kurcalanmis pre-image ledger tarafindan reddedilir: commitment kayit
+-- degil, ZORLAMA.
+digestTamperRejected : Script ()
+digestTamperRejected = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  entCid <- mkEntitlement p venueCid
+  now <- getTime
+  let terms = mkTerms p "tw-e" sampleEntryDigest now 3600 100.0 0.5
+  lockCid <- mkLock p terms
+  stakeCid <- submitMulti [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "tw-e"; terms
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+  passTime (seconds 15)
+  submitMultiMustFail [p.operator, p.venue, p.player] [] do
+    exerciseCmd stakeCid GameStake_Settle with
+      disposition = ReturnedInFull; returnedAmount = 100.0; forfeitedAmount = 0.0
+      payoutAmount = 0.0
+      outcomeDigest = textDigest "gercek-belge"
+      revealedOutcome = Some "kurcalanmis"   -- digest tutmaz
+      revealedEntry = None
+      custodyRef = Some (HoldingRef lockCid)
+      settlementMeta = Metadata.emptyMetadata
+
+-- | Asgari dongu suresi dolmadan settlement reddedilir.
+minCycleDurationEnforced : Script ()
+minCycleDurationEnforced = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  entCid <- mkEntitlement p venueCid
+  now <- getTime
+  let terms = mkTerms p "tw-f" sampleEntryDigest now 3600 100.0 0.5
+  lockCid <- mkLock p terms
+  stakeCid <- submitMulti [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "tw-f"; terms
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+  -- Zaman ILERLETILMIYOR.
+  submitMultiMustFail [p.operator, p.venue, p.player] [] do
+    exerciseCmd stakeCid GameStake_Settle with
+      disposition = ReturnedInFull; returnedAmount = 100.0; forfeitedAmount = 0.0
+      payoutAmount = 0.0; outcomeDigest = textDigest "x"
+      revealedOutcome = None; revealedEntry = None
+      custodyRef = Some (HoldingRef lockCid)
+      settlementMeta = Metadata.emptyMetadata
+
+-- | Kilit suresi dolduktan sonra oyuncu TEK BASINA cikabilir.
+-- arCCade'in oyuncunun slotunu mahsur birakabilecegi bir durum yoktur.
+playerSelfRecovery : Script ()
+playerSelfRecovery = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  entCid <- mkEntitlement p venueCid
+  now <- getTime
+  let terms = mkTerms p "tw-g" sampleEntryDigest now 60 100.0 0.5
+  stakeCid <- submitMulti [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "tw-g"; terms
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+
+  -- Sure dolmadan cikis reddedilir.
+  submitMustFail p.player do exerciseCmd stakeCid GameStake_ExpireUnsettled
+
+  passTime (seconds 61)
+  newEntCid <- submit p.player do exerciseCmd stakeCid GameStake_ExpireUnsettled
+  ent <- queryContractId p.player newEntCid
+  case ent of
+    Some e -> assertMsg "sure asimi dongu sayilmaz" (e.cyclesCompleted == 0)
+    None -> abort "entitlement geri gelmedi"
+
+-- | Kuru kosum kipi: custody kaniti olmadan tum dongu calisir.
+-- TestNet'te cuzdanda 0 CC varken SDK'nin ucdan uca gosterilebilmesini saglar.
+dryRunNeedsNoCustody : Script ()
+dryRunNeedsNoCustody = script do
+  p <- allocParties
+  let dryPolicy = dryRunPolicy
+  venueCid <- mkVenue p ModeDryRun dryPolicy
+  entCid <- mkEntitlement p venueCid
+  now <- getTime
+  let terms = mkTerms p "dry-1" sampleEntryDigest now 3600 100.0 0.01
+  stakeCid <- submitMulti [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "dry-1"; terms
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+  passTime (seconds 15)
+  newEntCid <- submit p.operator do
+    exerciseCmd stakeCid GameStake_Settle with
+      disposition = ReturnedInFull; returnedAmount = 100.0; forfeitedAmount = 0.0
+      payoutAmount = 0.0; outcomeDigest = textDigest "dry"
+      revealedOutcome = None; revealedEntry = None
+      custodyRef = None
+      settlementMeta = Metadata.emptyMetadata
+  ent <- queryContractId p.operator newEntCid
+  case ent of
+    Some e -> assertMsg "kuru kosum dongusu de sayilir (raporlamada ayri sinifta)" (e.cyclesCompleted == 1)
+    None -> abort "entitlement geri gelmedi"
+
+-- | Zaman kilitli stake settlement icinde musadere EDILEMEZ.
+timeLockedForfeitRejected : Script ()
+timeLockedForfeitRejected = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  entCid <- mkEntitlement p venueCid
+  now <- getTime
+  let terms = mkTerms p "tw-h" sampleEntryDigest now 3600 100.0 0.5
+  lockCid <- mkLock p terms
+  stakeCid <- submitMulti [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "tw-h"; terms
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+  passTime (seconds 15)
+  submitMultiMustFail [p.operator, p.venue, p.player] [] do
+    exerciseCmd stakeCid GameStake_Settle with
+      disposition = ReturnedWithForfeit
+      returnedAmount = 60.0
+      forfeitedAmount = 40.0     -- toplami dogru ama TimeLockedHolding'de yasak
+      payoutAmount = 0.0; outcomeDigest = textDigest "x"
+      revealedOutcome = None; revealedEntry = None
+      custodyRef = Some (HoldingRef lockCid)
+      settlementMeta = Metadata.emptyMetadata
+
+-- | Ucret tabani politikanin altinda olamaz (S3).
+feeFloorEnforced : Script ()
+feeFloorEnforced = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  entCid <- mkEntitlement p venueCid
+  now <- getTime
+  let terms = mkTerms p "tw-i" sampleEntryDigest now 3600 100.0 0.0   -- ucret yok
+  submitMultiMustFail [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "tw-i"; terms
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+
+-- | Kilit suresi asgarinin altindaysa commitment reddedilir (S4).
+lockDurationFloorEnforced : Script ()
+lockDurationFloorEnforced = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  entCid <- mkEntitlement p venueCid
+  now <- getTime
+  let terms = mkTerms p "tw-j" sampleEntryDigest now 30 100.0 0.5   -- 30s < minLockSeconds 60
+  submitMultiMustFail [p.operator, p.player] [] do
+    exerciseCmd entCid Entitlement_Commit with
+      gameCode = "trade-wars-v4"; cycleId = "tw-j"; terms
+      entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata

@@ -1,0 +1,89 @@
+-- | Venue politikasinin kanonik belgesi, tutarlilik kontrolu ve sartlarin
+-- politikaya uygunlugunun dogrulanmasi.
+--
+-- Yururlukteki politikanin TAM metni her stake'te digest olarak commit edilir
+-- (@GameStake.policyHash@). Boylece "bu dongu hangi kurallar altinda acildi"
+-- sorusu, arCCade'in sonradan ne soyledigine degil, dongunun kendi kaydina
+-- bakilarak cevaplanir.
+module ArCCade.GameSdk.Policy where
+
+import ArCCade.GameSdk.Digest
+import ArCCade.GameSdk.Time (secondsBetween)
+import ArCCade.GameSdk.Types
+
+-- | Politikanin kanonik belgesi. Alanlar ada gore siralandigi icin burada
+-- siralama onemli degildir; ileride eklenecek bir alan v1 digest'ini
+-- degistirmez (sema surumu artmadikca).
+policyDocument : VenuePolicy -> Text
+policyDocument p =
+  canonDocument "arccade-venue-policy" 1
+    [ ("min-stake-amount", canonDecimal p.minStakeAmount)
+    , ("max-stake-amount", canonDecimal p.maxStakeAmount)
+    , ("min-platform-fee", canonDecimal p.minPlatformFee)
+    , ("max-payout-amount", canonDecimal p.maxPayoutAmount)
+    , ("min-lock-seconds", canonInt p.minLockSeconds)
+    , ("max-lock-seconds", canonInt p.maxLockSeconds)
+    , ("min-cycle-seconds", canonInt p.minCycleSeconds)
+    , ("max-cycle-seconds", canonInt p.maxCycleSeconds)
+    , ("cooldown-seconds", canonInt p.cooldownSeconds)
+    , ("abort-cooldown-seconds", canonInt p.abortCooldownSeconds)
+    , ("concurrency-limit", canonInt p.concurrencyLimit)
+    , ("require-custody-proof", canonBool p.requireCustodyProof)
+    ]
+
+policyDigest : VenuePolicy -> Text
+policyDigest = textDigest . policyDocument
+
+-- | Tutarli politika. @ensure@ icinde kullanilir, dolayisiyla tutarsiz bir
+-- politikayla venue YARATILAMAZ.
+--
+-- Kritik kural: @minLockSeconds >= minCycleSeconds@. Dongunun ortasinda
+-- suresi dolabilen bir kilit, kilit degildir — oyuncu asgari sure dolmadan
+-- @OwnerExpireLockV2@ ile cikabilirdi ve S4'teki "minimum ledger lock
+-- duration" taahhudu icini bosaltirdi.
+validPolicy : VenuePolicy -> Bool
+validPolicy p =
+  p.minStakeAmount > 0.0
+    && p.maxStakeAmount >= p.minStakeAmount
+    && p.minPlatformFee >= 0.0
+    && p.maxPayoutAmount >= 0.0
+    && p.minLockSeconds > 0
+    && p.maxLockSeconds >= p.minLockSeconds
+    && p.minCycleSeconds > 0
+    && p.maxCycleSeconds >= p.minCycleSeconds
+    && p.minLockSeconds >= p.minCycleSeconds
+    && p.cooldownSeconds >= 0
+    && p.abortCooldownSeconds >= 0
+    && p.concurrencyLimit > 0
+
+-- | Bir dongunun sartlari politikaya uyuyor mu — commitment aninda,
+-- LEDGER SAATINE gore olculur.
+assertTermsMeetPolicy : VenuePolicy -> Text -> Text -> Party -> Time -> StakeTerms -> Update ()
+assertTermsMeetPolicy p cycleId entryDigest venue now terms = do
+  assertMsg "stake politikanin altinda"
+    (terms.stakeAmount >= p.minStakeAmount)
+  assertMsg "stake politikanin ustunde"
+    (terms.stakeAmount <= p.maxStakeAmount)
+
+  -- S3: ucret tabani. Sonuc olusmadan once harcanan, iade edilmeyen maruziyet.
+  assertMsg "platform ucreti politikanin tabaninin altinda"
+    (terms.feeAmount >= p.minPlatformFee)
+  assertMsg "ucret alicisi venue olmali"
+    (terms.feeReceiver == venue)
+
+  -- S4: kilidin suresi ledger saatinden olculur, platformun beyanindan degil.
+  let lockSeconds = secondsBetween now terms.lockExpiresAt
+  assertMsg "kilit suresi asgarinin altinda"
+    (lockSeconds >= p.minLockSeconds)
+  assertMsg "kilit suresi azaminin ustunde"
+    (lockSeconds <= p.maxLockSeconds)
+
+  -- Venue kilit tutucusu olmali: hem S6 kaniti icin (venue LockedAmulet'in
+  -- imzacisi olur, dolayisiyla settlement'ta kontrati gorebilir) hem de
+  -- oyuncunun sure dolmadan tek basina cikamamasi icin.
+  assertMsg "venue kilit tutuculari arasinda degil"
+    (venue `elem` terms.lockHolders)
+
+  -- Etiket, dongu kimligini ve giris commitment'ini kilide baglar.
+  assertMsg "custody etiketi bu dongunun kimligi ve giris digest'i ile eslesmiyor"
+    (terms.custodyTag == custodyTagFor cycleId entryDigest)

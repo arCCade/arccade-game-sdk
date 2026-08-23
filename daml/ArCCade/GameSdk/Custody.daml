@@ -1,0 +1,97 @@
+-- | Custody dogrulamasi — S6'nin kilit tasi ve paketin tek custody sinirinin
+-- gectigi yer.
+--
+-- Settlement, parayi oynatmadan ONCE kilidi standart @Holding@ arayuzunden
+-- CEKER ve kilidin gercekten var oldugunu, bu dongunun etiketini tasidigini,
+-- venue'yu tutucu olarak adlandirdigini, tutari kapsadigini ve anlasilan
+-- surede bittigini dogrular.
+--
+-- Bunun yasal olmasinin sebebi: venue kilit tutucusudur, dolayisiyla
+-- @LockedAmulet@'in imzacilarindandir (Splice/Amulet.daml). Venue'nun
+-- gonderimde OKUYAN taraflar arasinda bulunmasi zorunludur — bir gonderim,
+-- okuyan taraflarindan hicbirinin gormedigi bir kontrati cekemez.
+module ArCCade.GameSdk.Custody where
+
+import Splice.Api.Token.HoldingV1 qualified as Holding
+
+import ArCCade.GameSdk.Types
+
+-- | Kilitli holding'i dogrular. Kontrat cekilir, view'i okunur ve alti kosul
+-- birden aranir. Herhangi biri tutmazsa settlement basarisiz olur.
+verifyLockedHolding
+  :  Party                          -- ^ oyuncu (holding sahibi olmali)
+  -> Party                          -- ^ venue (kilit tutuculari arasinda olmali)
+  -> Holding.InstrumentId           -- ^ beklenen enstruman
+  -> Decimal                        -- ^ stake tutari (holding en az bu kadar olmali)
+  -> Time                           -- ^ anlasilan kilit bitisi
+  -> Text                           -- ^ bu dongunun custody etiketi
+  -> ContractId Holding.Holding
+  -> Update ()
+verifyLockedHolding player venue instrumentId stakeAmount lockExpiresAt custodyTag cid = do
+  h <- fetch cid
+  let v = view h
+
+  assertMsg "kilitli holding oyuncuya ait degil"
+    (v.owner == player)
+  assertMsg "kilitli holding beklenen enstrumanda degil"
+    (v.instrumentId == instrumentId)
+  assertMsg "kilitli holding stake tutarini kapsamiyor"
+    (v.amount >= stakeAmount)
+
+  case v.lock of
+    None ->
+      abort "holding kilitli degil: custody kaniti yok"
+    Some lk -> do
+      assertMsg "venue kilit tutuculari arasinda degil"
+        (venue `elem` lk.holders)
+      -- Kilit bitisi ACIKCA anlasilan zaman olmali. @expiresAfter@ ile
+      -- belirlenmis bir kilit burada kabul edilmez: sure, kontratin
+      -- yaratildigi ledger zamanina goreli olur ve settlement aninda
+      -- bagimsiz olarak dogrulanamaz.
+      assertMsg "kilit bitisi anlasilan zamanla eslesmiyor"
+        (lk.expiresAt == Some lockExpiresAt)
+      -- Etiket, kilidi bu dongunun kimligine ve giris commitment'ine baglar.
+      -- Yanlis etiket yazan bir venue o stake'i kullanilamaz hale getirmistir:
+      -- yalnizca abort edilebilir ve abort'lar ayrica sayilir.
+      assertMsg "kilit baglami bu dongunun custody etiketi degil"
+        (lk.context == Some custodyTag)
+
+-- | Custody mekanigine gore dogrulamayi yonlendirir.
+--
+-- @TokenAllocation@ FAIL-CLOSED'dir: tip duzeyinde sinir kesilmis olsun diye
+-- vardir, ama 1.0.0'da dogrulanamaz ve reddedilir. Sebebi bilinclidir —
+-- Allocation V1'de @Allocation_Withdraw@'in controller'i tek basina
+-- gonderendir; bu bir kilit degil, kullanicinin cikabildigi bir rezervasyondur
+-- ve komiteye kilit diye sunulmamalidir.
+--
+-- @requireCustodyProof == False@ yalnizca @ModeDryRun@ venue'lari icindir:
+-- cuzdanda 0 CC varken tum yasam dongusunun kosulabilmesini saglar. Kuru
+-- kosum donguleri raporlamada ayri sinifta sayilir ve nitelikli faaliyet
+-- olarak sunulmaz.
+verifyCustody
+  :  CustodyMechanic
+  -> Optional CustodyRef
+  -> Bool                           -- ^ politika custody kaniti sart kosuyor mu
+  -> Party                          -- ^ oyuncu
+  -> Party                          -- ^ venue
+  -> Holding.InstrumentId
+  -> Decimal
+  -> Time
+  -> Text
+  -> Update ()
+verifyCustody mechanic ref requireProof player venue instrumentId stakeAmount lockExpiresAt custodyTag =
+  case (mechanic, ref) of
+    (TokenAllocation, _) ->
+      abort "TokenAllocation custody 1.0.0'da desteklenmiyor (Allocation_Withdraw tek basina gonderen tarafindan cagrilabilir; bu kilit degildir)"
+
+    (TimeLockedHolding, Some (HoldingRef cid)) ->
+      verifyLockedHolding player venue instrumentId stakeAmount lockExpiresAt custodyTag cid
+
+    (TimeLockedHolding, Some (AllocationRef _)) ->
+      abort "TimeLockedHolding mekanigi icin allocation referansi verilemez"
+
+    (TimeLockedHolding, _) ->
+      -- Referans yok: yalnizca politika kanit istemiyorsa (kuru kosum) gecerli.
+      assertMsg
+        "custody kaniti zorunlu ama holding referansi verilmedi"
+        (not requireProof)

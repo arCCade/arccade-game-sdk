@@ -1,0 +1,165 @@
+-- | Sahiplik degisimi — zincire yazilan ikinci deger olayi turu.
+--
+-- MIMARI KURAL. Bu SDK deger tasimayan hicbir yazma sunmaz. Oyun aktivitesi
+-- (skor, seviye, envanter durumu, eslesme, siralama) uygulamanin KENDI
+-- veritabaninda kalir. Zincire yalnizca sahiplik ve deger degistiren olaylar
+-- yazilir. Bu modul bunlardan ikincisini karsilar: takas ve satis.
+--
+-- Her bacak KENDI @instrumentId@'sini tasir, dolayisiyla ayni primitif
+-- sunlarin hepsini karsilar:
+--
+--   * item  <-> CC      (marketplace satisi)
+--   * item  <-> item    (takas)
+--   * asset <-> asset   (ucuncu tarafin kendi varliklari)
+--
+-- @instrumentId.admin@ o varligin registry'sidir: CC icin DSO, bir oyun item'i
+-- icin o item'i basan uygulamanin registry partisi. SDK varligi YORUMLAMAZ.
+--
+-- CUSTODY MODELI. Fonlar token standardinin allocation'lari uzerinden yurur ve
+-- @Trade_Settle@ anina kadar taraflarda kalir; escrow yoktur. Allocation V1
+-- burada DOGRU secimdir: @Allocation_Withdraw@'in tek basina gonderen
+-- tarafindan cagrilabilmesi bir stake icin kabul edilemezdi (o bir kilit degil
+-- rezervasyondur), ama bir TAKAS icin dogru davranis budur — karsi taraf settle
+-- etmeden once vazgecebilmek, escrow'a mahkum olmamak demektir.
+--
+-- Canton motoru tum bacaklarin hepsi-ya-hicbiri calismasini garanti eder:
+-- "item gitti ama CC gelmedi" ara durumu yoktur.
+module ArCCade.GameSdk.Trade where
+
+import DA.Optional (optionalToList)
+import DA.Set qualified as Set
+import DA.TextMap (TextMap)
+import DA.TextMap qualified as TextMap
+
+import Splice.Api.Token.AllocationV1 qualified as Allocation
+import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.MetadataV1 qualified as Metadata
+
+import ArCCade.GameSdk.Types (isHex64)
+
+-- | Bacaklarin kanonik anahtarlari.
+legKeyOffer : Text
+legKeyOffer = "offer"
+
+legKeyAsk : Text
+legKeyAsk = "ask"
+
+-- | Bir bacak: "sender, receiver'a amount birim instrumentId gonderir".
+data TradeLeg = TradeLeg
+  with
+    sender : Party
+    receiver : Party
+    instrumentId : Holding.InstrumentId
+    amount : Decimal
+  deriving (Eq, Show)
+
+validLeg : TradeLeg -> Bool
+validLeg l = l.amount > 0.0 && l.sender /= l.receiver
+
+-- | Teklif. Maker imzalar, venue gozlemler.
+--
+-- @taker = None@ acik teklif demektir: herhangi bir taraf kabul edebilir.
+-- @Some p@ ise yalnizca o taraf kabul edebilir.
+template TradeProposal
+  with
+    venue : Party
+    tradeId : Text
+    maker : Party
+    taker : Optional Party
+    legs : TextMap TradeLeg
+    expiresAt : Time
+      -- ^ Teklifin gecerlilik sonu; ledger saatiyle olculur.
+    settleBefore : Time
+      -- ^ Kabul edildikten sonra settlement icin son tarih.
+    tradeDigest : Text
+      -- ^ Yayinlanan takas belgesinin sha256'si. Item'in adi, gorseli,
+      --   nadirligi zincire YAZILMAZ; zincirde olan sahiplik degisimidir.
+    meta : Metadata.Metadata
+  where
+    signatory maker
+    observer venue :: optionalToList taker
+
+    ensure
+      tradeId /= ""
+        && isHex64 tradeDigest
+        && TextMap.size legs >= 2
+        && all validLeg (map snd (TextMap.toList legs))
+        && expiresAt <= settleBefore
+
+    -- Taker kabul eder; her iki taraf imzaci olur.
+    choice TradeProposal_Accept : ContractId Trade
+      with
+        acceptor : Party
+      controller acceptor
+      do
+        now <- getTime
+        assertMsg "teklifin suresi doldu" (now < expiresAt)
+        case taker of
+          Some t -> assertMsg "bu teklif baska bir tarafa acik" (acceptor == t)
+          None -> assertMsg "acik teklifi maker kabul edemez" (acceptor /= maker)
+        create Trade with
+          venue; tradeId; maker
+          taker = acceptor
+          legs; settleBefore; tradeDigest; meta
+
+    choice TradeProposal_Cancel : ()
+      controller maker
+      do pure ()
+
+    -- Suresi dolmus teklifin temizligi.
+    choice TradeProposal_Expire : ()
+      controller venue
+      do
+        now <- getTime
+        assertMsg "teklifin suresi henuz dolmadi" (now >= expiresAt)
+        pure ()
+
+-- | Kabul edilmis takas. Venue tum bacaklari TEK islemde calistirir.
+template Trade
+  with
+    venue : Party
+    tradeId : Text
+    maker : Party
+    taker : Party
+    legs : TextMap TradeLeg
+    settleBefore : Time
+    tradeDigest : Text
+    meta : Metadata.Metadata
+  where
+    signatory maker, taker
+    observer venue
+
+    ensure tradeId /= "" && isHex64 tradeDigest && TextMap.size legs >= 2
+
+    -- Atomik settlement: tum bacaklar ya birlikte gerceklesir ya hic.
+    choice Trade_Settle : TextMap Allocation.Allocation_ExecuteTransferResult
+      with
+        allocations : TextMap (ContractId Allocation.Allocation, Metadata.ExtraArgs)
+      controller venue
+      do
+        now <- getTime
+        assertMsg "settlement son tarihi gecti" (now < settleBefore)
+
+        -- Allocation anahtarlari bacak anahtarlariyla BIREBIR ortusmeli:
+        -- eksik bir bacak sessizce atlanamaz, fazlasi kacak yol acamaz.
+        let legKeys = Set.fromList (map fst (TextMap.toList legs))
+        let allocKeys = Set.fromList (map fst (TextMap.toList allocations))
+        assertMsg "allocation anahtarlari bacak anahtarlariyla ortusmuyor"
+          (legKeys == allocKeys)
+
+        results <- forA (TextMap.toList allocations) $ \(k, (cid, args)) -> do
+          r <- exercise cid (Allocation.Allocation_ExecuteTransfer args)
+          pure (k, r)
+        pure (TextMap.fromList results)
+
+    -- Iptal: bacaklarin allocation'lari geri cekilir.
+    choice Trade_Cancel : TextMap (Optional Allocation.Allocation_CancelResult)
+      with
+        reason : Text
+        allocationsToCancel : TextMap (ContractId Allocation.Allocation, Metadata.ExtraArgs)
+      controller venue
+      do
+        results <- forA (TextMap.toList allocationsToCancel) $ \(k, (cid, args)) -> do
+          r <- exercise cid (Allocation.Allocation_Cancel args)
+          pure (k, Some r)
+        pure (TextMap.fromList results)

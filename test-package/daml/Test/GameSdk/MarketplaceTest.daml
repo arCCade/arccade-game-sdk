@@ -1,0 +1,230 @@
+-- | Uctan uca marketplace testi.
+--
+-- Kanitlanan sey: iki farkli oyuncunun, iki farkli varligi, TEK islemde
+-- atomik olarak el degistiriyor. "Item gitti ama karsiligi gelmedi" ara
+-- durumu yok.
+--
+-- Akis:
+--   1. Registry kurulur, kiraciya basim hakki verilir
+--   2. Oyuncular hesap acar (yetki devri)
+--   3. Kiraci iki varlik basar: alice'e kilic, bob'a altin
+--   4. Her iki taraf da AllocationFactory ile takas icin ayirir
+--   5. Venue Trade_Settle ile atomik olarak takasi tamamlar
+module Test.GameSdk.MarketplaceTest where
+
+import DA.Optional (isNone, isSome)
+import DA.TextMap qualified as TextMap
+import DA.Time (addRelTime, seconds)
+import Daml.Script
+
+import Splice.Api.Token.AllocationV1 qualified as Allocation
+import Splice.Api.Token.AllocationInstructionV1 qualified as AllocInstr
+import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.MetadataV1 qualified as Metadata
+
+import ArCCade.GameSdk.Registry
+import ArCCade.GameSdk.Trade
+
+-- | Bos ekstra argumanlar; standart bunun icin hazir sabit sunmuyor.
+noExtraArgs : Metadata.ExtraArgs
+noExtraArgs = Metadata.ExtraArgs with
+  context = Metadata.emptyChoiceContext
+  meta = Metadata.emptyMetadata
+
+data M = M
+  with
+    admin : Party
+    operator : Party
+    tenant : Party
+    venue : Party
+    alice : Party
+    bob : Party
+    registryCid : ContractId AssetRegistry
+    rightCid : ContractId TenantMintRight
+    aliceAcct : ContractId PlayerAccount
+    bobAcct : ContractId PlayerAccount
+
+setupMarket : Script M
+setupMarket = do
+  admin <- allocateParty "Registry"
+  operator <- allocateParty "Operator"
+  tenant <- allocateParty "Tenant"
+  venue <- allocateParty "Venue"
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bob"
+
+  registryCid <- submit admin do
+    createCmd AssetRegistry with
+      admin; operator; registryId = "eco-1"; meta = Metadata.emptyMetadata
+  rightCid <- submit admin do
+    exerciseCmd registryCid AssetRegistry_IssueMintRight with
+      tenantId = "mygame"; tenantParty = tenant
+      mintQuota = 100; quotaWindowSeconds = 3600
+  aliceAcct <- submitMulti [alice, admin] [] do
+    createCmd PlayerAccount with admin; player = alice; accountId = "a"
+  bobAcct <- submitMulti [bob, admin] [] do
+    createCmd PlayerAccount with admin; player = bob; accountId = "b"
+  pure M with admin; operator; tenant; venue; alice; bob; registryCid; rightCid; aliceAcct; bobAcct
+
+instOf : M -> Text -> Holding.InstrumentId
+instOf m localId = Holding.InstrumentId with admin = m.admin; id = localId
+
+mint : M -> ContractId TenantMintRight -> ContractId PlayerAccount -> Text -> Decimal
+      -> Script (ContractId Asset, ContractId TenantMintRight)
+mint m right acct localId amount =
+  submitMulti [m.admin, m.tenant] [] do
+    exerciseCmd right MintRight_Mint with
+      accountCid = acct
+      instrumentId = instOf m localId
+      amount
+      assetMeta = Metadata.emptyMetadata
+
+-- | Bir tarafin takas icin varligini ayirmasi.
+allocateFor
+  :  M -> Party -> ContractId Asset -> Text -> Decimal -> Party -> Text -> Time -> Time
+  -> Script (ContractId Allocation.Allocation)
+allocateFor m sender assetCid localId amount receiver legId allocateBefore settleBefore = do
+  now <- getTime
+  r <- submitMulti [sender, m.admin] [] do
+    exerciseCmd (toInterfaceContractId @AllocInstr.AllocationFactory m.registryCid) AllocInstr.AllocationFactory_Allocate with
+      expectedAdmin = m.admin
+      allocation = Allocation.AllocationSpecification with
+        settlement = Allocation.SettlementInfo with
+          executor = m.venue
+          settlementRef = Allocation.Reference with
+            id = "trade-1"
+            cid = None
+          requestedAt = now
+          allocateBefore
+          settleBefore
+          meta = Metadata.emptyMetadata
+        transferLegId = legId
+        transferLeg = Allocation.TransferLeg with
+          sender
+          receiver
+          amount
+          instrumentId = instOf m localId
+          meta = Metadata.emptyMetadata
+      requestedAt = now
+      inputHoldingCids = [toInterfaceContractId assetCid]
+      extraArgs = noExtraArgs
+  case r.output of
+    AllocInstr.AllocationInstructionResult_Completed cid -> pure cid
+    _ -> abort "allocation tamamlanmadi"
+
+-- | TAM AKIS: kilic <-> altin, tek islemde atomik.
+atomicItemForGoldTrade : Script ()
+atomicItemForGoldTrade = script do
+  m <- setupMarket
+  now <- getTime
+  let allocateBefore = addRelTime now (seconds 600)
+  let settleBefore = addRelTime now (seconds 1200)
+
+  -- Alice'in kilici, Bob'un altini.
+  (swordCid, r1) <- mint m m.rightCid m.aliceAcct "mygame/sword-of-dawn#a1" 1.0
+  (goldCid, _) <- mint m r1 m.bobAcct "mygame/gold" 250.0
+
+  -- Iki taraf da ayirir.
+  swordAlloc <- allocateFor m m.alice swordCid "mygame/sword-of-dawn#a1" 1.0 m.bob
+                  legKeyOffer allocateBefore settleBefore
+  goldAlloc <- allocateFor m m.bob goldCid "mygame/gold" 250.0 m.alice
+                  legKeyAsk allocateBefore settleBefore
+
+  -- Takas kaydi: maker teklif eder, taker kabul eder.
+  let legs = TextMap.fromList
+        [ (legKeyOffer, TradeLeg with
+            sender = m.alice; receiver = m.bob
+            instrumentId = instOf m "mygame/sword-of-dawn#a1"; amount = 1.0)
+        , (legKeyAsk, TradeLeg with
+            sender = m.bob; receiver = m.alice
+            instrumentId = instOf m "mygame/gold"; amount = 250.0)
+        ]
+  proposalCid <- submit m.alice do
+    createCmd TradeProposal with
+      venue = m.venue
+      tradeId = "trade-1"
+      maker = m.alice
+      taker = Some m.bob
+      legs
+      expiresAt = allocateBefore
+      settleBefore
+      tradeDigest = "0000000000000000000000000000000000000000000000000000000000000000"
+      meta = Metadata.emptyMetadata
+  tradeCid <- submit m.bob do
+    exerciseCmd proposalCid TradeProposal_Accept with acceptor = m.bob
+
+  -- ATOMIK SETTLEMENT: iki bacak tek islemde.
+  _ <- submitMulti [m.venue, m.alice, m.bob] [] do
+    exerciseCmd tradeCid Trade_Settle with
+      allocations = TextMap.fromList
+        [ (legKeyOffer, (swordAlloc, noExtraArgs))
+        , (legKeyAsk, (goldAlloc, noExtraArgs))
+        ]
+
+  -- Sahiplik gercekten el degistirdi mi.
+  aliceAssets <- query @Asset m.alice
+  bobAssets <- query @Asset m.bob
+  let aliceHas s = any (\(_, a) -> a.holding.owner == m.alice && a.holding.instrumentId.id == s) aliceAssets
+  let bobHas s = any (\(_, a) -> a.holding.owner == m.bob && a.holding.instrumentId.id == s) bobAssets
+  assertMsg "Alice altini almali" (aliceHas "mygame/gold")
+  assertMsg "Bob kilici almali" (bobHas "mygame/sword-of-dawn#a1")
+
+-- | Eksik bacakla settlement REDDEDILIR: sessizce yarim takas olmaz.
+settleRejectsMissingLeg : Script ()
+settleRejectsMissingLeg = script do
+  m <- setupMarket
+  now <- getTime
+  let allocateBefore = addRelTime now (seconds 600)
+  let settleBefore = addRelTime now (seconds 1200)
+  (swordCid, r1) <- mint m m.rightCid m.aliceAcct "mygame/sword#a1" 1.0
+  (goldCid, _) <- mint m r1 m.bobAcct "mygame/gold" 250.0
+  swordAlloc <- allocateFor m m.alice swordCid "mygame/sword#a1" 1.0 m.bob legKeyOffer allocateBefore settleBefore
+  _ <- allocateFor m m.bob goldCid "mygame/gold" 250.0 m.alice legKeyAsk allocateBefore settleBefore
+
+  let legs = TextMap.fromList
+        [ (legKeyOffer, TradeLeg with sender = m.alice; receiver = m.bob; instrumentId = instOf m "mygame/sword#a1"; amount = 1.0)
+        , (legKeyAsk, TradeLeg with sender = m.bob; receiver = m.alice; instrumentId = instOf m "mygame/gold"; amount = 250.0)
+        ]
+  proposalCid <- submit m.alice do
+    createCmd TradeProposal with
+      venue = m.venue; tradeId = "t2"; maker = m.alice; taker = Some m.bob
+      legs; expiresAt = allocateBefore; settleBefore
+      tradeDigest = "0000000000000000000000000000000000000000000000000000000000000000"
+      meta = Metadata.emptyMetadata
+  tradeCid <- submit m.bob do exerciseCmd proposalCid TradeProposal_Accept with acceptor = m.bob
+
+  -- YALNIZCA bir bacagin allocation'i veriliyor.
+  submitMultiMustFail [m.venue, m.alice, m.bob] [] do
+    exerciseCmd tradeCid Trade_Settle with
+      allocations = TextMap.fromList [(legKeyOffer, (swordAlloc, noExtraArgs))]
+
+-- | Kilitli holding girdi olarak KULLANILAMAZ: ayrilan varlik iki kez
+-- ayrilamaz.
+allocatedAssetCannotBeReused : Script ()
+allocatedAssetCannotBeReused = script do
+  m <- setupMarket
+  now <- getTime
+  let allocateBefore = addRelTime now (seconds 600)
+  let settleBefore = addRelTime now (seconds 1200)
+  (swordCid, _) <- mint m m.rightCid m.aliceAcct "mygame/sword#a1" 1.0
+  _ <- allocateFor m m.alice swordCid "mygame/sword#a1" 1.0 m.bob legKeyOffer allocateBefore settleBefore
+  -- Ayni varlik ikinci kez ayrilmaya calisiliyor: kontrat zaten arsivlendi.
+  now2 <- getTime
+  submitMultiMustFail [m.alice, m.admin] [] do
+    exerciseCmd (toInterfaceContractId @AllocInstr.AllocationFactory m.registryCid) AllocInstr.AllocationFactory_Allocate with
+      expectedAdmin = m.admin
+      allocation = Allocation.AllocationSpecification with
+        settlement = Allocation.SettlementInfo with
+          executor = m.venue
+          settlementRef = Allocation.Reference with id = "t3"; cid = None
+          requestedAt = now2
+          allocateBefore; settleBefore
+          meta = Metadata.emptyMetadata
+        transferLegId = legKeyOffer
+        transferLeg = Allocation.TransferLeg with
+          sender = m.alice; receiver = m.bob; amount = 1.0
+          instrumentId = instOf m "mygame/sword#a1"
+          meta = Metadata.emptyMetadata
+      requestedAt = now2
+      inputHoldingCids = [toInterfaceContractId swordCid]
+      extraArgs = noExtraArgs

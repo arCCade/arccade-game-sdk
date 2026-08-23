@@ -1,0 +1,141 @@
+-- | Kip disiplini testleri.
+--
+-- Bu modul, dusmanca incelemenin buldugu bosluğun kapandigini kanitlar.
+-- Onceki surumde @GameVenue.ensure@ eksik yazilmisti ve incelemeci sunu
+-- fiilen kosarak gosterdi:
+--
+--   "ModeLive venue with requireCustodyProof=False settled a 100 CC cycle
+--    with NO lock on ledger; mode field still says ModeLive"
+--
+-- Asagidaki testler o senaryonun artik KONTRAT SEVIYESINDE imkansiz oldugunu
+-- dogrular. Bu, S1 ("deger hareket ettirir ya da baglar") ve S6 ("ledger
+-- uzerinde bagimsiz dogrulanabilir") iddialarinin bir beyan degil, yaratilamaz
+-- bir durum olmasi demektir.
+module Test.GameSdk.ModeDisciplineTest where
+
+import Daml.Script
+
+import Splice.Api.Token.MetadataV1 qualified as Metadata
+
+import ArCCade.GameSdk.Cycle
+import ArCCade.GameSdk.Types
+
+import Test.GameSdk.Fixture
+
+-- | Canli venue custody kanitindan VAZGECEMEZ.
+liveVenueCannotWaiveCustodyProof : Script ()
+liveVenueCannotWaiveCustodyProof = script do
+  p <- allocParties
+  let weak = testPolicy with requireCustodyProof = False
+  submitMustFail p.operator do
+    createCmd GameVenue with
+      venue = p.venue; operator = p.operator
+      venueId = venueIdFor ModeLive
+      sdkVersion = "1.1.0"
+      mode = ModeLive
+      gameCodes = ["trade-wars-v4"]
+      policy = weak
+      custody = TimeLockedHolding
+      instrumentId = testInstrument p.registry
+      auditor = None
+      meta = Metadata.emptyMetadata
+
+-- | Kuru kosum venue'su onek TASIMAK ZORUNDA.
+dryRunVenueNeedsPrefix : Script ()
+dryRunVenueNeedsPrefix = script do
+  p <- allocParties
+  submitMustFail p.operator do
+    createCmd GameVenue with
+      venue = p.venue; operator = p.operator
+      venueId = "arccade-games-1"          -- onek yok
+      sdkVersion = "1.1.0"
+      mode = ModeDryRun
+      gameCodes = ["trade-wars-v4"]
+      policy = dryRunPolicy
+      custody = TimeLockedHolding
+      instrumentId = testInstrument p.registry
+      auditor = None
+      meta = Metadata.emptyMetadata
+
+-- | Kuru kosum venue'su UCRET ALAMAZ — niteliksiz faaliyet gelir uretmemeli.
+dryRunVenueCannotCharge : Script ()
+dryRunVenueCannotCharge = script do
+  p <- allocParties
+  let charging = dryRunPolicy with minPlatformFee = 5.0
+  submitMustFail p.operator do
+    createCmd GameVenue with
+      venue = p.venue; operator = p.operator
+      venueId = venueIdFor ModeDryRun
+      sdkVersion = "1.1.0"
+      mode = ModeDryRun
+      gameCodes = ["trade-wars-v4"]
+      policy = charging
+      custody = TimeLockedHolding
+      instrumentId = testInstrument p.registry
+      auditor = None
+      meta = Metadata.emptyMetadata
+
+-- | Kuru kosum venue'su ODUL DAGITAMAZ.
+dryRunVenueCannotPayOut : Script ()
+dryRunVenueCannotPayOut = script do
+  p <- allocParties
+  let paying = dryRunPolicy with maxPayoutAmount = 500.0
+  submitMustFail p.operator do
+    createCmd GameVenue with
+      venue = p.venue; operator = p.operator
+      venueId = venueIdFor ModeDryRun
+      sdkVersion = "1.1.0"
+      mode = ModeDryRun
+      gameCodes = ["trade-wars-v4"]
+      policy = paying
+      custody = TimeLockedHolding
+      instrumentId = testInstrument p.registry
+      auditor = None
+      meta = Metadata.emptyMetadata
+
+-- | Slot yolu ATLANARAK dogrudan GameStake yaratilamaz: degismezler artik
+-- kontratin kendisine bagli. Etiket dongu kimligiyle tutmuyorsa reddedilir.
+directStakeCannotBypassTagBinding : Script ()
+directStakeCannotBypassTagBinding = script do
+  p <- allocParties
+  now <- getTime
+  let terms = mkTerms p "tw-x" sampleEntryDigest now 3600 100.0 0.5
+  -- Etiket BASKA bir dongunun kimligini tasiyor.
+  let badTerms = terms with custodyTag = custodyTagFor "tw-BASKA" sampleEntryDigest
+  submitMultiMustFail [p.operator, p.player] [] do
+    createCmd GameStake with
+      venue = p.venue; operator = p.operator
+      venueId = venueIdFor ModeLive; mode = ModeLive
+      player = p.player
+      gameCode = "trade-wars-v4"; cycleId = "tw-x"
+      concurrencyIndex = 0; tier = "silver"
+      policy = testPolicy; custody = TimeLockedHolding
+      terms = badTerms
+      committedAt = now
+      entryDigest = sampleEntryDigest
+      digestAlg = digestAlgId
+      policyHash = "x"
+      cyclesCompletedBefore = 0; lifetimeStakedBefore = 0.0
+      auditor = None; meta = Metadata.emptyMetadata
+
+-- | Dogrudan yaratimda ucret tabani da atlanamaz (S3).
+directStakeCannotBypassFeeFloor : Script ()
+directStakeCannotBypassFeeFloor = script do
+  p <- allocParties
+  now <- getTime
+  let terms = mkTerms p "tw-y" sampleEntryDigest now 3600 100.0 0.0  -- ucret yok
+  submitMultiMustFail [p.operator, p.player] [] do
+    createCmd GameStake with
+      venue = p.venue; operator = p.operator
+      venueId = venueIdFor ModeLive; mode = ModeLive
+      player = p.player
+      gameCode = "trade-wars-v4"; cycleId = "tw-y"
+      concurrencyIndex = 0; tier = "silver"
+      policy = testPolicy; custody = TimeLockedHolding
+      terms
+      committedAt = now
+      entryDigest = sampleEntryDigest
+      digestAlg = digestAlgId
+      policyHash = "x"
+      cyclesCompletedBefore = 0; lifetimeStakedBefore = 0.0
+      auditor = None; meta = Metadata.emptyMetadata

@@ -1,0 +1,92 @@
+-- | Pixel Race adaptoru — SABLON YOK, yalnizca veri ve saf fonksiyonlar.
+--
+-- Giris belgesi RNG tohumunun TAAHHUDUNU (@rngSeedCommit@) icerir, sonuc
+-- belgesi tohumun KENDISINI (@rngSeed@) acar. @GameStake_Settle@ her iki
+-- digest'i de ledger uzerinde yeniden hesapladigi icin, tohumun oynanistan
+-- once sabitlendigi KANITLANIR.
+--
+-- Bu, Pixel Race'in bugun yapamadigi bir "kanitlanabilir adillik" iddiasidir
+-- ve ek bir yazma maliyeti YOKTUR: iki digest zaten var olan iki islemin
+-- icinde tasinir.
+module ArCCade.GameSdk.Games.PixelRace where
+
+import ArCCade.GameSdk.Digest
+
+gameCode : Text
+gameCode = "pixel-race-v1"
+
+data GamePlay = GamePlay
+  with
+    gameNumber : Int
+    score : Int
+    survivalSeconds : Int
+    maxLevel : Int
+    coinsCollected : Int
+  deriving (Eq, Show)
+
+data PixelRaceEntry = PixelRaceEntry
+  with
+    cycleId : Text
+    tier : Text
+    maxGamesPerSession : Int
+    rngSeedCommit : Text
+      -- ^ Tohumun taahhudu: @sha256(rngSeed)@. Oynanistan once sabitlenir.
+  deriving (Eq, Show)
+
+data PixelRaceOutcome = PixelRaceOutcome
+  with
+    cycleId : Text
+    rngSeed : Text
+      -- ^ Acilan tohum. @sha256 rngSeed == entry.rngSeedCommit@ olmalidir.
+    plays : [GamePlay]
+    totalScore : Int
+    xpAwarded : Decimal
+    returnedAmount : Decimal
+    forfeitedAmount : Decimal
+  deriving (Eq, Show)
+
+canonGamePlay : GamePlay -> Text
+canonGamePlay g =
+  canonFields
+    [ ("coins-collected", canonInt g.coinsCollected)
+    , ("game-number", canonInt g.gameNumber)
+    , ("max-level", canonInt g.maxLevel)
+    , ("score", canonInt g.score)
+    , ("survival-seconds", canonInt g.survivalSeconds)
+    ]
+
+entryDocument : PixelRaceEntry -> Text
+entryDocument e =
+  canonDocument "arccade-pixel-race-entry" 1
+    [ ("cycle-id", canonText e.cycleId)
+    , ("game-code", canonText gameCode)
+    , ("max-games-per-session", canonInt e.maxGamesPerSession)
+    , ("rng-seed-commit", canonText e.rngSeedCommit)
+    , ("tier", canonText e.tier)
+    ]
+
+entryDigest : PixelRaceEntry -> Text
+entryDigest = textDigest . entryDocument
+
+outcomeDocument : PixelRaceOutcome -> Text
+outcomeDocument o =
+  canonDocument "arccade-pixel-race-outcome" 1
+    [ ("cycle-id", canonText o.cycleId)
+    , ("forfeited-amount", canonDecimal o.forfeitedAmount)
+    , ("game-code", canonText gameCode)
+    , ("plays", canonList (map canonGamePlay o.plays))
+    , ("returned-amount", canonDecimal o.returnedAmount)
+    , ("rng-seed", canonText o.rngSeed)
+    , ("total-score", canonInt o.totalScore)
+    , ("xp-awarded", canonDecimal o.xpAwarded)
+    ]
+
+outcomeDigest : PixelRaceOutcome -> Text
+outcomeDigest = textDigest . outcomeDocument
+
+-- | Acilan tohumun giristeki taahhutle tutarli olup olmadigi.
+--
+-- Backend bunu settlement oncesi kontrol eder; ledger tarafinda ise ayni
+-- kanit iki digest kontrolunden dolayli olarak elde edilir.
+seedMatchesCommit : Text -> Text -> Bool
+seedMatchesCommit seed commitment = textDigest seed == commitment

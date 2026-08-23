@@ -1,0 +1,540 @@
+-- | Ekosistem varlik registry'si — CIP-0056 (Canton Network Token Standard).
+--
+-- # Neden bu modul var
+--
+-- SDK'yi kullanan uygulamalar KENDI validator'larini calistirmaz; arCCade'in
+-- participant'i uzerinden calisirlar. Dolayisiyla kendi registry'lerini de
+-- calistiramazlar. Token standardinda @instrumentId.admin@ bir varligi BASAN
+-- ve holding kontratlarini IMZALAYAN partidir — CC icin DSO. Kiracilarin
+-- varliklari icin bu parti arCCade olmak zorundadir.
+--
+-- Bu modul o registry'dir: ekosistemdeki her oyun varligi buradan gecer.
+--
+-- # CIP-0056 uyumu
+--
+-- @Asset@, standardin @Holding@ arayuzunu uygular. Sonuc: varlik herhangi bir
+-- Canton cuzdaninda gorunur, standart araclarla sorgulanir ve baska
+-- uygulamalarla takas edilebilir. Kendi semamizi uydurmuyoruz — uydurursak
+-- ekosistem disina cikamayiz.
+--
+-- Referans: @Splice.Testing.Tokens.TestTokenV1@ (splice-test-token-v1),
+-- standardin resmi asgari implementasyonu.
+--
+-- # Ad alani neden ZORUNLU
+--
+-- Tum kiracilarin varliklari ayni @admin@ altinda oldugu icin, ad alani
+-- olmazsa kiraci A @"sword-of-dawn"@ diye kiraci B'nin varligini basabilir.
+-- @assertNamespaced@ bunu kontrat seviyesinde imkansiz kilar.
+--
+-- # Kota ve onay
+--
+-- Basim kota dahilinde SERBESTTIR: kiraci kendi anahtariyla, arCCade'e sormadan
+-- basar. Kotanin ustunde ACIK ONAY gerekir. Boylece ekosistem buyumesi
+-- yavaslamaz ama kotuye kullanim sinirsiz kalmaz.
+module ArCCade.GameSdk.Registry where
+
+import DA.Optional (isNone)
+import DA.Text qualified as T
+
+import Splice.Api.Token.AllocationV1 qualified as Allocation
+import Splice.Api.Token.AllocationInstructionV1 qualified as AllocInstr
+import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.MetadataV1 qualified as Metadata
+import Splice.Api.Token.TransferInstructionV1 qualified as TransferInstr
+
+import ArCCade.GameSdk.Time (addSeconds, secondsBetween)
+
+-- | Ad alani ayiricisi. Benzersiz ornekler icin @#@ kullanilir (@assets.js@).
+namespaceSeparator : Text
+namespaceSeparator = "/"
+
+-- | Varligin kimligi bu kiracinin ad alaninda mi.
+inTenantNamespace : Text -> Holding.InstrumentId -> Bool
+inTenantNamespace tenantId instrumentId =
+  (tenantId <> namespaceSeparator) `T.isPrefixOf` instrumentId.id
+
+assertNamespaced : Text -> Holding.InstrumentId -> Update ()
+assertNamespaced tenantId instrumentId =
+  assertMsg
+    ("varlik kimligi kiracinin ad alaninda degil: " <> instrumentId.id
+       <> " (beklenen onek: " <> tenantId <> namespaceSeparator <> ")")
+    (inTenantNamespace tenantId instrumentId)
+
+-- | Bir varlik holding'i.
+--
+-- Imzacilar sahip VE registry admin'idir; standardin referans
+-- implementasyonundaki desen budur. Registry'nin imzaci olmasi, varligin
+-- registry disinda uretilememesini saglar.
+template Asset
+  with
+    holding : Holding.HoldingView
+      -- ^ Veri, arayuz tanimindaki tipin kendisiyle saklanir.
+  where
+    signatory holding.owner, holding.instrumentId.admin
+
+    -- Kilitli holding bu sablonla uretilmez; kilit, kilitli varyantin isidir.
+    ensure holding.amount > 0.0 && isNone holding.lock
+
+    interface instance Holding.Holding for Asset where
+      view = holding
+
+-- | Oyuncunun varlik hesabi — YETKI DEVRI kontrati.
+--
+-- # Neden gerekli
+--
+-- @Asset@'in imzacilari sahip VE admin'dir (standardin gerektirdigi sey budur).
+-- Dolayisiyla bir oyuncuya varlik basmak, oyuncunun o islemi imzalamasini
+-- gerektirir. Bir oyun platformu icin bu kabul edilemez: her odul dagitiminda,
+-- her ganimet dususunde oyuncuya imza attiramazsiniz.
+--
+-- Cozum Daml'in standart yetki devri desenidir: oyuncu BIR KEZ hesap acar ve
+-- imzalar. Sonrasinda registry, bu kontratin choice'ini kullanarak oyuncunun
+-- yetkisiyle varlik yaratabilir — cunku oyuncu kontratin imzacisidir.
+--
+-- Oyuncu istedigi an hesabi kapatabilir; kapandiktan sonra ona yeni varlik
+-- basilamaz ama MEVCUT varliklari kendisinde kalir.
+template PlayerAccount
+  with
+    admin : Party
+    player : Party
+    accountId : Text
+  where
+    signatory player, admin
+
+    ensure accountId /= ""
+
+    -- Yalnizca registry cagirir; oyuncunun yetkisi bu kontrattan gelir.
+    -- Kota ve ad alani denetimi cagiran @MintRight_Mint@ icinde yapilir.
+    nonconsuming choice Account_Deposit : ContractId Asset
+      with
+        instrumentId : Holding.InstrumentId
+        amount : Decimal
+        assetMeta : Metadata.Metadata
+      controller admin
+      do
+        assertMsg "registry admin varligin admin'i olmali" (instrumentId.admin == admin)
+        assertMsg "yatirilan miktar pozitif olmali" (amount > 0.0)
+        create Asset with
+          holding = Holding.HoldingView with
+            owner = player; instrumentId; amount
+            lock = None
+            meta = assetMeta
+
+    -- Oyuncu hesabi kapatir. Mevcut varliklarina DOKUNULMAZ.
+    choice Account_Close : ()
+      controller player
+      do pure ()
+
+-- | Registry'nin kok kaydi. Kiracilara basim hakki dagitir.
+template AssetRegistry
+  with
+    admin : Party
+      -- ^ arCCade'in registry partisi; tum kiraci varliklarinin @instrumentId.admin@'i.
+    operator : Party
+    registryId : Text
+    meta : Metadata.Metadata
+  where
+    signatory admin
+    observer operator
+
+    ensure registryId /= ""
+
+    -- Bir kiraciya basim hakki verir.
+    nonconsuming choice AssetRegistry_IssueMintRight : ContractId TenantMintRight
+      with
+        tenantId : Text
+        tenantParty : Party
+        mintQuota : Int
+          -- ^ Pencere basina serbest basim adedi.
+        quotaWindowSeconds : Int
+      controller admin
+      do
+        now <- getTime
+        assertMsg "kiraci kimligi bos olamaz" (tenantId /= "")
+        assertMsg "kiraci kimliginde ad alani ayiricisi olamaz"
+          (not (namespaceSeparator `T.isInfixOf` tenantId))
+        assertMsg "kota negatif olamaz" (mintQuota >= 0)
+        assertMsg "kota penceresi pozitif olmali" (quotaWindowSeconds > 0)
+        create TenantMintRight with
+          admin; operator; tenantId; tenantParty
+          mintQuota; quotaWindowSeconds
+          windowStart = now
+          mintedInWindow = 0
+          totalMinted = 0
+          suspended = False
+
+    -- CIP-0056 TRANSFER FABRIKASI. Cuzdanlar varligi bununla gonderir.
+    interface instance TransferInstr.TransferFactory for AssetRegistry where
+      view = TransferInstr.TransferFactoryView with
+        admin
+        meta = Metadata.emptyMetadata
+
+      transferFactory_publicFetchImpl _self _arg =
+        pure TransferInstr.TransferFactoryView with
+          admin
+          meta = Metadata.emptyMetadata
+
+      transferFactory_transferImpl _self arg = do
+        now <- getTime
+        let t = arg.transfer
+        assertMsg "beklenen admin bu registry olmali" (arg.expectedAdmin == admin)
+        assertMsg "enstrumanin admin'i bu registry olmali" (t.instrumentId.admin == admin)
+        assertMsg "transfer miktari pozitif olmali" (t.amount > 0.0)
+        assertMsg "transfer son tarihi gecmis" (now < t.executeBefore)
+
+        optChange <- consumeAssets t.sender t.instrumentId t.amount t.inputHoldingCids
+        let changeCids = case optChange of
+              Some c -> [toInterfaceContractId c]
+              None -> []
+
+        if t.receiver == t.sender
+          then do
+            -- Kendine transfer: dogrudan tamamlanir, kabul beklenmez.
+            cid <- create Asset with
+              holding = Holding.HoldingView with
+                owner = t.sender; instrumentId = t.instrumentId; amount = t.amount
+                lock = None
+                meta = Metadata.emptyMetadata
+            pure TransferInstr.TransferInstructionResult with
+              senderChangeCids = changeCids
+              output = TransferInstr.TransferInstructionResult_Completed with
+                receiverHoldingCids = [toInterfaceContractId cid]
+              meta = Metadata.emptyMetadata
+          else do
+            -- Baskasina transfer: alicinin kabulunu bekler.
+            instrCid <- create AssetTransferOffer with transfer = t
+            pure TransferInstr.TransferInstructionResult with
+              senderChangeCids = changeCids
+              output = TransferInstr.TransferInstructionResult_Pending with
+                transferInstructionCid = toInterfaceContractId instrCid
+              meta = Metadata.emptyMetadata
+
+    -- CIP-0056 ALLOCATION FABRIKASI. Marketplace'in dayandigi sey budur:
+    -- Trade_Settle tam olarak buradan cikan allocation'lari tuketir.
+    interface instance AllocInstr.AllocationFactory for AssetRegistry where
+      view = AllocInstr.AllocationFactoryView with
+        admin
+        meta = Metadata.emptyMetadata
+
+      allocationFactory_publicFetchImpl _self _arg =
+        pure AllocInstr.AllocationFactoryView with
+          admin
+          meta = Metadata.emptyMetadata
+
+      allocationFactory_allocateImpl _self arg = do
+        now <- getTime
+        let a = arg.allocation
+        let leg = a.transferLeg
+        let stl = a.settlement
+        assertMsg "beklenen admin bu registry olmali" (arg.expectedAdmin == admin)
+        assertMsg "enstrumanin admin'i bu registry olmali" (leg.instrumentId.admin == admin)
+        assertMsg "ayrilan miktar pozitif olmali" (leg.amount > 0.0)
+        assertMsg "allocateBefore <= settleBefore olmali" (stl.allocateBefore <= stl.settleBefore)
+        assertMsg "allocation son tarihi gecmis" (now < stl.allocateBefore)
+
+        optChange <- consumeAssets leg.sender leg.instrumentId leg.amount arg.inputHoldingCids
+        let changeCids = case optChange of
+              Some c -> [toInterfaceContractId c]
+              None -> []
+
+        allocCid <- create AssetAllocation with allocation = a
+        pure AllocInstr.AllocationInstructionResult with
+          senderChangeCids = changeCids
+          output = AllocInstr.AllocationInstructionResult_Completed with
+            allocationCid = toInterfaceContractId allocCid
+          meta = Metadata.emptyMetadata
+
+-- | Bir kiracinin basim hakki. Kota sayaci burada tutulur.
+--
+-- Bu kontrat AYNI ZAMANDA kiracinin ekosistemdeki kimligidir: askiya alinmasi
+-- (@suspended@) kiracinin yeni varlik basmasini durdurur ama MEVCUT
+-- varliklarina dokunmaz — oyuncularin sahip oldugu seyler onlarin kalir.
+template TenantMintRight
+  with
+    admin : Party
+    operator : Party
+    tenantId : Text
+    tenantParty : Party
+    mintQuota : Int
+    quotaWindowSeconds : Int
+    windowStart : Time
+    mintedInWindow : Int
+    totalMinted : Int
+    suspended : Bool
+  where
+    signatory admin
+    observer tenantParty, operator
+
+    ensure tenantId /= "" && mintQuota >= 0 && quotaWindowSeconds > 0
+
+    -- KOTA DAHILINDE BASIM. Kiraci kendi basina yapar; arCCade'e sormaz.
+    choice MintRight_Mint : (ContractId Asset, ContractId TenantMintRight)
+      with
+        accountCid : ContractId PlayerAccount
+          -- ^ Oyuncunun yetki devri hesabi; varlik buradan yaratilir.
+        instrumentId : Holding.InstrumentId
+        amount : Decimal
+        assetMeta : Metadata.Metadata
+      controller admin, tenantParty
+      do
+        now <- getTime
+        assertMsg "kiraci askiya alinmis" (not suspended)
+        assertMsg "registry admin varligin admin'i olmali" (instrumentId.admin == admin)
+        assertNamespaced tenantId instrumentId
+        assertMsg "basim miktari pozitif olmali" (amount > 0.0)
+
+        -- Kayan pencere: sure dolduysa sayac sifirlanir.
+        let windowExpired = secondsBetween windowStart now >= quotaWindowSeconds
+        let usedBefore = if windowExpired then 0 else mintedInWindow
+        let newWindowStart = if windowExpired then now else windowStart
+
+        assertMsg
+          ("basim kotasi doldu (" <> show mintQuota <> " / "
+             <> show quotaWindowSeconds <> " sn); onayli basim kullanin")
+          (usedBefore < mintQuota)
+
+        assetCid <- exercise accountCid Account_Deposit with
+          instrumentId; amount; assetMeta
+        rightCid <- create this with
+          windowStart = newWindowStart
+          mintedInWindow = usedBefore + 1
+          totalMinted = totalMinted + 1
+        pure (assetCid, rightCid)
+
+    -- KOTA USTU BASIM. arCCade'in acik onayiyla; sayaci tuketmez cunku
+    -- zaten idari bir karardir ve ayrica raporlanir.
+    choice MintRight_MintApproved : (ContractId Asset, ContractId TenantMintRight)
+      with
+        accountCid : ContractId PlayerAccount
+        instrumentId : Holding.InstrumentId
+        amount : Decimal
+        approvalReason : Text
+        assetMeta : Metadata.Metadata
+      controller admin
+      do
+        assertMsg "kiraci askiya alinmis" (not suspended)
+        assertMsg "registry admin varligin admin'i olmali" (instrumentId.admin == admin)
+        assertNamespaced tenantId instrumentId
+        assertMsg "basim miktari pozitif olmali" (amount > 0.0)
+        assertMsg "onay gerekcesi bos olamaz" (approvalReason /= "")
+
+        assetCid <- exercise accountCid Account_Deposit with
+          instrumentId; amount; assetMeta
+        rightCid <- create this with totalMinted = totalMinted + 1
+        pure (assetCid, rightCid)
+
+    -- Kotayi/pencereyi gunceller.
+    choice MintRight_SetQuota : ContractId TenantMintRight
+      with
+        newQuota : Int
+        newWindowSeconds : Int
+      controller admin
+      do
+        assertMsg "kota negatif olamaz" (newQuota >= 0)
+        assertMsg "kota penceresi pozitif olmali" (newWindowSeconds > 0)
+        create this with mintQuota = newQuota; quotaWindowSeconds = newWindowSeconds
+
+    -- Askiya alma / geri alma. Mevcut varliklara DOKUNMAZ.
+    choice MintRight_SetSuspended : ContractId TenantMintRight
+      with
+        newSuspended : Bool
+        reason : Text
+      controller admin
+      do create this with suspended = newSuspended
+
+-- | Varligin yakilmasi.
+--
+-- Sahip ve registry birlikte imzalar: registry tek basina bir oyuncunun
+-- varligini yok edemez.
+template AssetBurnRequest
+  with
+    admin : Party
+    owner : Party
+    assetCid : ContractId Asset
+    reason : Text
+  where
+    signatory owner
+    observer admin
+
+    choice BurnRequest_Execute : ()
+      controller admin, owner
+      do
+        archive assetCid
+        pure ()
+
+-- ============================================================================
+-- CIP-0056 fabrikalari: transfer ve allocation
+--
+-- Buraya kadar varliklar BASILABILIYOR ve TUTULABILIYORDU ama TICARETI
+-- YAPILAMIYORDU. Asagidaki iki fabrika standardin geri kalanini tamamlar:
+--
+--   TransferFactory     cuzdanlarin varligi gondermesi
+--   AllocationFactory   Trade_Settle'in tukettigi allocation'larin uretimi
+--
+-- Ikisi de @AssetRegistry@ uzerinde arayuz ornegi olarak yasar; boylece
+-- standart araclar registry'yi kendiliginden bulur.
+-- ============================================================================
+
+-- | Girdi holding'lerini tuketir ve varsa ustu doner.
+--
+-- Her girdi icin dogrulanan: sahibi dogru mu, enstrumani dogru mu, kilitli mi.
+-- Kilitli bir holding girdi olarak KABUL EDILMEZ — kilit tam da bunu
+-- engellemek icin vardir.
+consumeAssets
+  :  Party
+  -> Holding.InstrumentId
+  -> Decimal
+  -> [ContractId Holding.Holding]
+  -> Update (Optional (ContractId Asset))
+consumeAssets owner instrumentId amount inputCids = do
+  amounts <- forA inputCids $ \cid -> do
+    h <- fetch cid
+    let v = view h
+    assertMsg "girdi holding baska bir sahibe ait" (v.owner == owner)
+    assertMsg "girdi holding beklenen enstrumanda degil" (v.instrumentId == instrumentId)
+    assertMsg "kilitli holding girdi olarak kullanilamaz" (isNone v.lock)
+    archive (fromInterfaceContractId @Asset cid)
+    pure v.amount
+  let total = sum amounts
+  assertMsg
+    ("yetersiz bakiye: " <> show total <> " < " <> show amount)
+    (total >= amount)
+  if total > amount
+    then do
+      changeCid <- create Asset with
+        holding = Holding.HoldingView with
+          owner; instrumentId
+          amount = total - amount
+          lock = None
+          meta = Metadata.emptyMetadata
+      pure (Some changeCid)
+    else pure None
+
+-- | Alicinin kabulunu bekleyen transfer. Ayni zamanda gonderilen miktarin
+-- holding'idir.
+template AssetTransferOffer
+  with
+    transfer : TransferInstr.Transfer
+  where
+    signatory transfer.sender, transfer.instrumentId.admin
+    observer transfer.receiver
+
+    ensure transfer.amount > 0.0 && transfer.requestedAt <= transfer.executeBefore
+
+    interface instance Holding.Holding for AssetTransferOffer where
+      view = Holding.HoldingView with
+        owner = transfer.sender
+        instrumentId = transfer.instrumentId
+        amount = transfer.amount
+        lock = Some Holding.Lock with
+          holders = [transfer.instrumentId.admin]
+          expiresAt = Some transfer.executeBefore
+          expiresAfter = None
+          context = Some "arccade-game-sdk: bekleyen transfer"
+        meta = Metadata.emptyMetadata
+
+    interface instance TransferInstr.TransferInstruction for AssetTransferOffer where
+      view = TransferInstr.TransferInstructionView with
+        originalInstructionCid = None
+        transfer
+        status = TransferInstr.TransferPendingReceiverAcceptance
+        meta = Metadata.emptyMetadata
+
+      transferInstruction_acceptImpl _self _arg = do
+        cid <- create Asset with
+          holding = Holding.HoldingView with
+            owner = transfer.receiver
+            instrumentId = transfer.instrumentId
+            amount = transfer.amount
+            lock = None
+            meta = Metadata.emptyMetadata
+        pure TransferInstr.TransferInstructionResult with
+          senderChangeCids = []
+          output = TransferInstr.TransferInstructionResult_Completed with
+            receiverHoldingCids = [toInterfaceContractId cid]
+          meta = Metadata.emptyMetadata
+
+      transferInstruction_rejectImpl _self _arg = returnToSender
+      transferInstruction_withdrawImpl _self _arg = returnToSender
+      transferInstruction_updateImpl _self _arg =
+        fail "TransferInstruction_Update: AssetTransferOffer bunu desteklemiyor"
+
+-- | Reddedilen/geri cekilen transferde miktar gonderene iade edilir.
+returnToSender : Update TransferInstr.TransferInstructionResult
+returnToSender = pure TransferInstr.TransferInstructionResult with
+  senderChangeCids = []
+  output = TransferInstr.TransferInstructionResult_Failed
+  meta = Metadata.emptyMetadata
+
+-- | Takas icin ayrilmis varlik. Ayni zamanda ayrilan miktarin holding'idir.
+--
+-- @Trade_Settle@'in tukettigi sey budur: venue tum bacaklarin
+-- @Allocation_ExecuteTransfer@'ini TEK islemde calistirir.
+template AssetAllocation
+  with
+    allocation : Allocation.AllocationSpecification
+  where
+    signatory allocation.transferLeg.sender, allocation.transferLeg.instrumentId.admin
+    observer allocation.settlement.executor
+
+    ensure allocation.transferLeg.amount > 0.0
+
+    interface instance Holding.Holding for AssetAllocation where
+      view = Holding.HoldingView with
+        owner = allocation.transferLeg.sender
+        instrumentId = allocation.transferLeg.instrumentId
+        amount = allocation.transferLeg.amount
+        lock = Some Holding.Lock with
+          holders = [allocation.settlement.executor]
+          expiresAt = Some allocation.settlement.settleBefore
+          expiresAfter = None
+          context = Some ("arccade-game-sdk: " <> allocation.settlement.settlementRef.id)
+        meta = Metadata.emptyMetadata
+
+    interface instance Allocation.Allocation for AssetAllocation where
+      view = Allocation.AllocationView with
+        allocation
+        holdingCids = []
+        meta = Metadata.emptyMetadata
+
+      -- Gonderen geri ceker: takas icin ayrilan miktar iade edilir.
+      -- NOT: bu YOL TAKASA OZGUDUR ve bir KILIT DEGILDIR — stake icin
+      -- kullanilamaz, cunku gonderen tek basina cikabilir.
+      allocation_withdrawImpl _self _arg = do
+        cid <- returnAllocationToSender allocation
+        pure Allocation.Allocation_WithdrawResult with
+          senderHoldingCids = [toInterfaceContractId cid]
+          meta = Metadata.emptyMetadata
+
+      allocation_cancelImpl _self _arg = do
+        cid <- returnAllocationToSender allocation
+        pure Allocation.Allocation_CancelResult with
+          senderHoldingCids = [toInterfaceContractId cid]
+          meta = Metadata.emptyMetadata
+
+      -- Atomik settlement: varlik aliciya gecer.
+      allocation_executeTransferImpl _self _arg = do
+        now <- getTime
+        assertMsg "settlement son tarihi gecti"
+          (now < allocation.settlement.settleBefore)
+        cid <- create Asset with
+          holding = Holding.HoldingView with
+            owner = allocation.transferLeg.receiver
+            instrumentId = allocation.transferLeg.instrumentId
+            amount = allocation.transferLeg.amount
+            lock = None
+            meta = Metadata.emptyMetadata
+        pure Allocation.Allocation_ExecuteTransferResult with
+          senderHoldingCids = []
+          receiverHoldingCids = [toInterfaceContractId cid]
+          meta = Metadata.emptyMetadata
+
+returnAllocationToSender : Allocation.AllocationSpecification -> Update (ContractId Asset)
+returnAllocationToSender allocation =
+  create Asset with
+    holding = Holding.HoldingView with
+      owner = allocation.transferLeg.sender
+      instrumentId = allocation.transferLeg.instrumentId
+      amount = allocation.transferLeg.amount
+      lock = None
+      meta = Metadata.emptyMetadata

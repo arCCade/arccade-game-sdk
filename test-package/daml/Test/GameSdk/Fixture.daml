@@ -1,0 +1,105 @@
+-- | Testler icin ortak kurulum.
+module Test.GameSdk.Fixture where
+
+import Daml.Script
+
+import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.MetadataV1 qualified as Metadata
+
+import ArCCade.GameSdk.Cycle
+import ArCCade.GameSdk.Digest (documentDigest)
+import ArCCade.GameSdk.Time
+import ArCCade.GameSdk.Types
+
+data Parties = Parties
+  with
+    operator : Party
+    venue : Party
+    player : Party
+    registry : Party
+    auditor : Party
+
+allocParties : Script Parties
+allocParties = do
+  operator <- allocateParty "Operator"
+  venue <- allocateParty "Venue"
+  player <- allocateParty "Player"
+  registry <- allocateParty "Registry"
+  auditor <- allocateParty "Auditor"
+  pure Parties with operator; venue; player; registry; auditor
+
+-- | Test politikasi: sureler kisa tutuldu ki testler zamani ilerletebilsin.
+-- Oranlar gercekci: minLockSeconds >= minCycleSeconds korunuyor.
+testPolicy : VenuePolicy
+testPolicy = VenuePolicy with
+  minStakeAmount = 10.0
+  maxStakeAmount = 1000.0
+  minPlatformFee = 0.01
+  maxPayoutAmount = 500.0
+  minLockSeconds = 60
+  maxLockSeconds = 172800      -- 48 saat tavan
+  minCycleSeconds = 10
+  maxCycleSeconds = 7200
+  cooldownSeconds = 30
+  abortCooldownSeconds = 300   -- abort daha uzun: fonlanmamis commit kapasite kazandirmaz
+  concurrencyLimit = 1
+  requireCustodyProof = True
+
+testInstrument : Party -> Holding.InstrumentId
+testInstrument registry = Holding.InstrumentId with admin = registry; id = "Amulet"
+
+-- | Ornek giris belgesi digest'i (oyun-bagimsiz; adaptor testleri ayri).
+sampleEntryDigest : Text
+sampleEntryDigest =
+  documentDigest "arccade-test-entry" 1 [("k", "v")]
+
+-- | Kuru kosum politikasi: kip disiplini geregi ucret ve odul SIFIR olmali.
+dryRunPolicy : VenuePolicy
+dryRunPolicy = testPolicy with
+  minPlatformFee = 0.0
+  maxPayoutAmount = 0.0
+  requireCustodyProof = False
+
+-- | venueId kipe gore uretilir: kuru kosum venue'lari "dryrun-" onekli olmak
+-- ZORUNDA (GameVenue.ensure).
+venueIdFor : VenueMode -> Text
+venueIdFor ModeLive = "arccade-games-1"
+venueIdFor ModeDryRun = dryRunVenuePrefix <> "arccade-games-1"
+
+mkVenue : Parties -> VenueMode -> VenuePolicy -> Script (ContractId GameVenue)
+mkVenue p mode policy =
+  submit p.operator do
+    createCmd GameVenue with
+      venue = p.venue
+      operator = p.operator
+      venueId = venueIdFor mode
+      sdkVersion = "1.0.0"
+      mode
+      gameCodes = ["trade-wars-v4", "pixel-race-v1"]
+      policy
+      custody = TimeLockedHolding
+      instrumentId = testInstrument p.registry
+      auditor = Some p.auditor
+      meta = Metadata.emptyMetadata
+
+mkEntitlement : Parties -> ContractId GameVenue -> Script (ContractId PlayerEntitlement)
+mkEntitlement p venueCid = do
+  cids <- submit p.operator do
+    exerciseCmd venueCid GameVenue_IssueEntitlements with
+      grants = [EntitlementGrant with player = p.player; concurrencyIndex = 0; tier = "silver"]
+  case cids of
+    [cid] -> pure cid
+    _ -> abort "beklenen tek entitlement"
+
+-- | Sartlari ledger saatine gore uretir.
+mkTerms : Parties -> Text -> Text -> Time -> Int -> Decimal -> Decimal -> StakeTerms
+mkTerms p cycleId entryDigest now lockSeconds stakeAmount feeAmount =
+  StakeTerms with
+    stakeAmount
+    feeAmount
+    feeReceiver = p.venue
+    instrumentId = testInstrument p.registry
+    custody = TimeLockedHolding
+    lockHolders = [p.venue]
+    lockExpiresAt = addSeconds now lockSeconds
+    custodyTag = custodyTagFor cycleId entryDigest

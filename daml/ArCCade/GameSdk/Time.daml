@@ -1,0 +1,44 @@
+-- | Ledger zamani — paketteki TEK zaman kaynagi.
+--
+-- Bu modulun varlik sebebi tek bir kural: SDK'daki hicbir choice, arayanin
+-- bildirdigi bir zaman damgasini sure kontrolu icin kabul etmez. Her sure
+-- kontrolu choice govdesinde `now <- getTime` ile ledger saatinden beslenir.
+--
+-- Kural bos bir ilke degil: onceki pakette (arccade-game-contracts v0.2.0)
+-- tur bitisini platformun bildirdigi `currentEpoch` belirliyordu, yani
+-- platform turu istedigi an bitmis sayabiliyordu. v0.3.0'da ledger saatine
+-- gecildi ve TestNet'te dogrulandi — 11,5 gun ileri bir zaman damgasiyla
+-- gonderilen erken kapatma denemesi ledger tarafindan reddedildi.
+--
+-- ArCCade.Common'dan import edilmek yerine yeniden yazildi: SDK'nin
+-- arccade-game-contracts paketine hicbir bagimliligi olmamali.
+module ArCCade.GameSdk.Time where
+
+import DA.Date (date, Month(Jan))
+import DA.Time (time, subTime, convertRelTimeToMicroseconds, seconds, addRelTime)
+
+-- | Unix epoch baslangici (1970-01-01T00:00:00Z).
+epoch : Time
+epoch = time (date 1970 Jan 1) 0 0 0
+
+-- | Ledger zamani -> epoch'tan beri MIKROSANIYE.
+--
+-- Digest'lerde zaman her zaman bu birimle, tamsayi olarak kodlanir;
+-- ISO metni kullanilmaz (kanonik olmayan bicimlendirme riski).
+epochMicros : Time -> Int
+epochMicros t = convertRelTimeToMicroseconds (subTime t epoch)
+
+-- | Ledger zamani -> epoch'tan beri SANIYE (asagi yuvarlanir).
+epochSeconds : Time -> Int
+epochSeconds t = epochMicros t / 1000000
+
+-- | Iki zaman arasindaki saniye farki: `secondsBetween a b == epochSeconds b - epochSeconds a`.
+--
+-- Sonuc b, a'dan onceyse negatiftir; cagiran taraf isaret kontrolunu
+-- kendisi yapmalidir (ornegin sure bandi kontrolleri).
+secondsBetween : Time -> Time -> Int
+secondsBetween a b = epochSeconds b - epochSeconds a
+
+-- | Bir zamana saniye ekler. Cooldown ve son tarih hesaplarinda kullanilir.
+addSeconds : Time -> Int -> Time
+addSeconds t s = addRelTime t (seconds s)

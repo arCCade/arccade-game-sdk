@@ -1,0 +1,386 @@
+-- | Dongu basina TUM zincir ustu yuzey.
+--
+-- Tamamlanmis bir dongu TAM OLARAK IKI islemdir ve ikisi de deger tasir:
+--
+--   YAZMA 1 — COMMITMENT. Tek islem, @actAs = [player, venue, operator]@.
+--     komut 1: @AmuletRules_Transfer@ — oyuncunun Amulet'lerinden venue'ya
+--              iade edilmeyen ucret, oyuncuya @TimeLock@'lu stake ciktisi
+--              (gercek @LockedAmulet@) ve ustu para.
+--     komut 2: @Entitlement_Commit@ — slot tuketilir, @GameStake@ yaratilir.
+--     Uygulama tarafi net: 1 arsiv + 1 yaratim.
+--
+--   YAZMA 2 — SETTLEMENT. Tek islem, @actAs = [operator, venue, player]@.
+--     komut 1: @GameStake_Settle@ — kilit CEKILEREK dogrulanir, digest'ler
+--              ledger uzerinde yeniden hesaplanir, slot geri verilir.
+--     komut 2: @LockedAmulet_UnlockV2@ — kilit acilir, para oyuncuya doner.
+--     komut 3 (istege bagli): odul odemesi.
+--     SIRA ONEMLI: Settle kilidi ceker, dolayisiyla kilidi arsivleyen
+--     unlock'tan ONCE calismalidir.
+--     Uygulama tarafi net: 1 arsiv + 1 yaratim, ve yaratilan sey yazma
+--     1'den once de var olan bos slotun ta kendisidir. Sonucu kaydetmek
+--     icin HICBIR SEY yaratilmaz.
+--
+-- Sonuc — disposition, tutarlar, outcome digest — parayi oynatan islemin
+-- EXERCISE NODE'unda yasar. Bu node duz (ACS-delta) akista GORUNMEZ;
+-- raporlama ve ucuncu taraf denetim @TRANSACTION_SHAPE_LEDGER_EFFECTS@ ile
+-- okumak zorundadir. Bu, bu participant uzerinde dogrulanmistir.
+module ArCCade.GameSdk.Cycle where
+
+import DA.Optional (optionalToList)
+import DA.Text qualified as T
+
+import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.MetadataV1 qualified as Metadata
+
+import ArCCade.GameSdk.Custody
+import ArCCade.GameSdk.Digest
+import ArCCade.GameSdk.Policy
+import ArCCade.GameSdk.Time
+import ArCCade.GameSdk.Types
+
+-- | Verilen pre-image gercekten saklanan digest'i uretiyor mu.
+--
+-- Pre-image verilmemisse kontrol atlanir (reveal istege baglidir); verilmisse
+-- digest LEDGER UZERINDE yeniden hesaplanir ve uyusmazlik reddedilir. Boylece
+-- commitment kayit altina alinmakla kalmaz, zorlanir.
+assertDigestMatches : Text -> Text -> Optional Text -> Update ()
+assertDigestMatches _ _ None = pure ()
+assertDigestMatches label expected (Some preimage) =
+  assertMsg
+    (label <> " belgesi saklanan digest ile uyusmuyor")
+    (textDigest preimage == expected)
+
+-- | Venue: oyun mekaniginin ledger uzerinde okunabilir beyani.
+--
+-- @gameCodes@ alani S5'in zincir ustu ifadesidir: ayni custody ve settlement
+-- mekanigini paylasan oyunlar TEK venue ve tek PartyID altinda calisir,
+-- ve bu iddia bir mektupta degil kontratta durur.
+template GameVenue
+  with
+    venue : Party
+      -- ^ Oyun PartyID'si: kilit tutucusu, ucret alicisi, featured-app saglayicisi.
+    operator : Party
+      -- ^ Imzalayan/yonetici taraf. Bugun validator partisiyle ayni, ama ayri
+      --   tutuluyor ki oyun PartyID'si paket degisikligi olmadan ayrilabilsin.
+    venueId : Text
+    sdkVersion : Text
+    mode : VenueMode
+    gameCodes : [Text]
+    policy : VenuePolicy
+    custody : CustodyMechanic
+    instrumentId : Holding.InstrumentId
+    auditor : Optional Party
+    meta : Metadata.Metadata
+  where
+    signatory operator
+    observer venue :: optionalToList auditor
+
+    -- KIP DISIPLINI — nitelikli faaliyeti niteliksizden ayiran tek yapisal kontrol.
+    --
+    -- Bu kosullar olmadan @ModeLive@ bir venue @requireCustodyProof = False@ ile
+    -- kurulabiliyor ve HIC KILIT OLMADAN dongu settle edebiliyordu; S1'in
+    -- "deger hareket ettirir ya da baglar" ve S6'nin "ledger uzerinde bagimsiz
+    -- dogrulanabilir" sartlari o durumda bir iddiaya donusuyordu.
+    --
+    --   * Canli venue custody kanitindan VAZGECEMEZ.
+    --   * Kuru kosum venue'su kimliginden taninir ve PARA ALAMAZ/ODEYEMEZ —
+    --     boylece niteliksiz faaliyet ne ucret uretir ne odul dagitir.
+    ensure
+      validPolicy policy
+        && venueId /= ""
+        && not (null gameCodes)
+        && (mode == ModeDryRun || policy.requireCustodyProof)
+        && (mode == ModeLive
+              || (dryRunVenuePrefix `T.isPrefixOf` venueId
+                    && policy.minPlatformFee == 0.0
+                    && policy.maxPayoutAmount == 0.0))
+
+    -- Oyunculara slot dagitir. Toplu: N oyuncuyu ise almak tek islem.
+    -- Dongu disi ve amortismana tabi; nitelikli ucret tabaninin disinda.
+    nonconsuming choice GameVenue_IssueEntitlements : [ContractId PlayerEntitlement]
+      with
+        grants : [EntitlementGrant]
+      controller operator
+      do
+        now <- getTime
+        forA grants $ \g -> do
+          assertMsg "concurrencyIndex politika sinirinin disinda"
+            (g.concurrencyIndex >= 0 && g.concurrencyIndex < policy.concurrencyLimit)
+          create PlayerEntitlement with
+            venue; operator; venueId; mode
+            player = g.player
+            concurrencyIndex = g.concurrencyIndex
+            tier = g.tier
+            policy; custody; instrumentId; auditor
+            nextEligibleAt = now
+            cyclesCompleted = 0
+            lifetimeStaked = 0.0
+            meta = Metadata.emptyMetadata
+
+    -- Politika degisikligi ACIK DONGULERE ULASMAZ: her GameStake kendi
+    -- politika anlik goruntusunu ve policyHash'ini tasir. Bu bir performans
+    -- optimizasyonu degil, oyuncu korumasidir.
+    choice GameVenue_UpdatePolicy : ContractId GameVenue
+      with
+        newPolicy : VenuePolicy
+        newGameCodes : [Text]
+      controller operator
+      do
+        create this with policy = newPolicy; gameCodes = newGameCodes
+
+    -- Durustce not: mevcut entitlement ve stake'lere denetciyi GERIYE DONUK
+    -- eklemez; denetci dahil olusu bir sonraki dagitim/donguden itibaren gecerlidir.
+    choice GameVenue_SetAuditor : ContractId GameVenue
+      with
+        newAuditor : Optional Party
+      controller operator
+      do
+        create this with auditor = newAuditor
+
+-- | Oyuncunun slot jetonu — contract key'lerin olmadigi bir dunyada
+-- "oyuncu basina es zamanli dongu limiti"nin ledger tarafindan zorlanan
+-- karsiligi.
+--
+-- Oyuncuya tam olarak @concurrencyLimit@ adet entitlement verilir.
+-- @Entitlement_Commit@ birini TUKETIR, @GameStake_Settle@ geri yaratir.
+-- Ayni slot uzerinde iki es zamanli dongu imkansizdir: ikinci gonderim
+-- arsivlenmis bir kontrati tuketmeye calisir ve LEDGER tarafindan reddedilir
+-- — bir servis tarafindan degil.
+--
+-- Ek islem maliyeti sifirdir: arsiv yazma 1'e, yaratim yazma 2'ye biner.
+template PlayerEntitlement
+  with
+    venue : Party
+    operator : Party
+    venueId : Text
+    mode : VenueMode
+    player : Party
+    concurrencyIndex : Int
+    tier : Text
+    policy : VenuePolicy
+    custody : CustodyMechanic
+    instrumentId : Holding.InstrumentId
+    nextEligibleAt : Time
+      -- ^ Cooldown kapisi; bir onceki settlement tarafindan ledger saatinden yazilir.
+    cyclesCompleted : Int
+    lifetimeStaked : Decimal
+    auditor : Optional Party
+    meta : Metadata.Metadata
+  where
+    signatory operator
+    observer player :: venue :: optionalToList auditor
+
+    -- @validPolicy@ burada da aranir: aksi halde operator, tutarsiz bir politika
+    -- tasiyan slot uretip @Entitlement_Commit@ icindeki tum bant kontrollerini
+    -- anlamsizlastirabilirdi (slot politikanin anlik goruntusunu tasir).
+    ensure
+      validPolicy policy
+        && concurrencyIndex >= 0
+        && concurrencyIndex < policy.concurrencyLimit
+
+    -- YAZMA 1, komut 2. Komut 1 kilidi yaratan @AmuletRules_Transfer@'dir.
+    --
+    -- Iki komut birbirini GOREMEZ (tek gonderimde cikti-girdi zincirlemesi
+    -- yoktur). Baglanti bu yuzden atomiklik + custody etiketi uzerinden kurulur
+    -- ve settlement aninda dogrulanir.
+    choice Entitlement_Commit : ContractId GameStake
+      with
+        gameCode : Text
+        cycleId : Text
+        terms : StakeTerms
+        entryDigest : Text
+        stakeMeta : Metadata.Metadata
+      controller operator, player
+      do
+        now <- getTime
+        assertMsg "oyuncu cooldown suresinde" (now >= nextEligibleAt)
+        assertMsg "cycleId bos, cok uzun ya da ':'/'|' iceriyor" (isValidCycleId cycleId)
+        assertMsg "giris digest'i 64 karakterlik kucuk harf sha256 degil" (isHex64 entryDigest)
+        assertMsg "enstruman entitlement ile eslesmiyor" (terms.instrumentId == instrumentId)
+        assertMsg "custody mekanigi entitlement ile eslesmiyor" (terms.custody == custody)
+        assertTermsMeetPolicy policy cycleId entryDigest venue now terms
+        create GameStake with
+          venue; operator; venueId; mode; player; gameCode; cycleId
+          concurrencyIndex; tier; policy; custody; terms
+          committedAt = now
+          entryDigest
+          digestAlg = digestAlgId
+          policyHash = policyDigest policy
+          cyclesCompletedBefore = cyclesCompleted
+          lifetimeStakedBefore = lifetimeStaked
+          auditor
+          meta = stakeMeta
+
+    -- Hesap duzeyinde kill switch (S4): entitlement'i olmayan oyuncu dongu acamaz.
+    -- Gerekce exercise node'una yazilir.
+    choice Entitlement_Revoke : ()
+      with
+        reason : Text
+      controller operator
+      do pure ()
+
+    -- Rizali cikis: oyuncu, venue tek tarafli davranmadan ayrilabilir.
+    choice Entitlement_Retire : ()
+      controller operator, player
+      do pure ()
+
+-- | Acik dongu. Deger tasiyan tek uzun omurlu kontrat.
+template GameStake
+  with
+    venue : Party
+    operator : Party
+    venueId : Text
+    mode : VenueMode
+    player : Party
+    gameCode : Text
+      -- ^ SDK bunu ASLA yorumlamaz; oyun mantigi paketin disindadir.
+    cycleId : Text
+      -- ^ Ayni zamanda kilit baglaminin yuku.
+    concurrencyIndex : Int
+    tier : Text
+    policy : VenuePolicy
+      -- ^ Anlik goruntu: sonraki bir @GameVenue_UpdatePolicy@ acik bir dongunun icine uzanamaz.
+    custody : CustodyMechanic
+    terms : StakeTerms
+    committedAt : Time
+      -- ^ Ledger saati; asla bir choice argumani degil.
+    entryDigest : Text
+    digestAlg : Text
+    policyHash : Text
+    cyclesCompletedBefore : Int
+    lifetimeStakedBefore : Decimal
+    auditor : Optional Party
+    meta : Metadata.Metadata
+  where
+    signatory operator, player
+    observer venue :: optionalToList auditor
+
+    -- Bu kosullarin @Entitlement_Commit@ icinde de kontrol edildigi dogru, ama
+    -- ORADA olmasi yetmez: @GameStake@'in imzacilari operator+player oldugu icin
+    -- ikisi anlasirsa slot yolunu atlayip dogrudan kontrat yaratabilirler.
+    -- Degismezler bu yuzden kontratin kendisine baglanir.
+    ensure
+      isValidCycleId cycleId
+        && isHex64 entryDigest
+        && terms.stakeAmount > 0.0
+        -- Kilit etiketi bu dongunun kimligine ve giris commitment'ine bagli olmali.
+        && terms.custodyTag == custodyTagFor cycleId entryDigest
+        -- S3: ucret tabani kontratin degismezi; sonradan gevsetilemez.
+        && terms.feeAmount >= policy.minPlatformFee
+        && terms.stakeAmount >= policy.minStakeAmount
+        && terms.stakeAmount <= policy.maxStakeAmount
+        && terms.custody == custody
+        && venue `elem` terms.lockHolders
+
+    -- YAZMA 2, komut 1. HICBIR makbuz yaratmaz.
+    choice GameStake_Settle : ContractId PlayerEntitlement
+      with
+        disposition : Disposition
+        returnedAmount : Decimal
+        forfeitedAmount : Decimal
+        payoutAmount : Decimal
+        outcomeDigest : Text
+        revealedOutcome : Optional Text
+        revealedEntry : Optional Text
+        custodyRef : Optional CustodyRef
+        settlementMeta : Metadata.Metadata
+      controller operator
+      do
+        now <- getTime
+        assertMsg "sonuc digest'i 64 karakterlik kucuk harf sha256 degil" (isHex64 outcomeDigest)
+
+        -- Sure bandi: ledger saatinden, iki yonlu.
+        assertMsg "dongu asgari suresini doldurmadi"
+          (secondsBetween committedAt now >= policy.minCycleSeconds)
+        assertMsg "dongu azami sureyi asti"
+          (secondsBetween committedAt now <= policy.maxCycleSeconds)
+
+        assertMsg "disposition normal bir settlement icin gecerli degil"
+          (disposition == ReturnedInFull || disposition == ReturnedWithForfeit || disposition == ForfeitedInFull)
+        assertMsg "settle edilen tutarlar stake tutarini vermiyor"
+          (returnedAmount + forfeitedAmount == terms.stakeAmount)
+        assertMsg "returnedAmount negatif olamaz" (returnedAmount >= 0.0)
+        assertMsg "forfeitedAmount negatif olamaz" (forfeitedAmount >= 0.0)
+        -- Disposition etiketi tutarlarla CELISEMEZ. Bu node denetimin okudugu
+        -- yerdir; etiketin tutarlari yanlis anlatmasi, kaydin kendisini
+        -- guvenilmez yapardi.
+        assertMsg "ReturnedInFull stake'in tamamini iade etmeli"
+          (disposition /= ReturnedInFull || forfeitedAmount == 0.0)
+        assertMsg "ForfeitedInFull hicbir sey iade etmemeli"
+          (disposition /= ForfeitedInFull || returnedAmount == 0.0)
+        assertMsg "ReturnedWithForfeit hem iade hem musadere icermeli"
+          (disposition /= ReturnedWithForfeit
+             || (returnedAmount > 0.0 && forfeitedAmount > 0.0))
+
+        -- Zaman kilitli bir stake settlement isleminin ICINDE musadere
+        -- EDILEMEZ: @LockedAmulet_UnlockV2@ her zaman tam tutari sahibine oder
+        -- ve kilitli bir amulet gecerli bir transfer girdisi degildir.
+        -- Riske atilan tutar commitment aninda @terms.feeAmount@ olarak alinir.
+        assertMsg "zaman kilitli stake settlement icinde musadere edilemez; riske atilan tutari commitment'ta feeAmount olarak al"
+          (custody /= TimeLockedHolding || forfeitedAmount == 0.0)
+
+        assertMsg "payoutAmount negatif olamaz" (payoutAmount >= 0.0)
+        assertMsg "payoutAmount politika tavanini asiyor" (payoutAmount <= policy.maxPayoutAmount)
+
+        -- Commitment'lar ledger uzerinde yeniden hesaplanir.
+        assertDigestMatches "giris" entryDigest revealedEntry
+        assertDigestMatches "sonuc" outcomeDigest revealedOutcome
+
+        -- Kilit kaniti — parayi oynatmadan once.
+        verifyCustody custody custodyRef policy.requireCustodyProof
+          player venue terms.instrumentId terms.stakeAmount terms.lockExpiresAt terms.custodyTag
+
+        recycleEntitlement this True (addSeconds now policy.cooldownSeconds)
+
+    -- Kanit burada BILEREK istege baglidir: abort'un varlik sebebi zaten
+    -- kilidin olusmamis olabilmesidir (commitment'in kardes transferi
+    -- gerceklesmedi ya da venue iptal ediyor). Dongu SAYILMAZ ve daha uzun
+    -- @abortCooldownSeconds@ slotu kullanim disi tutar — yani fonlanmamis bir
+    -- commit, farmer'a hicbir kapasite kazandirmaz.
+    choice GameStake_Abort : ContractId PlayerEntitlement
+      with
+        reason : Text
+        custodyRef : Optional CustodyRef
+      controller operator, player
+      do
+        now <- getTime
+        case custodyRef of
+          Some (HoldingRef cid) ->
+            verifyLockedHolding player venue terms.instrumentId terms.stakeAmount
+              terms.lockExpiresAt terms.custodyTag cid
+          _ -> pure ()
+        recycleEntitlement this False (addSeconds now policy.abortCooldownSeconds)
+
+    -- @LockedAmulet_OwnerExpireLockV2@ ile eslesir; onun controller'i tek
+    -- basina sahiptir. Sure dolduktan sonra oyuncu, arCCade'e de DSO'ya da
+    -- ihtiyac duymadan parasini geri alir ve SDK kaydini burada temizler.
+    -- arCCade'in oyuncunun parasini ya da slotunu mahsur birakabilecegi
+    -- HICBIR durum yoktur.
+    choice GameStake_ExpireUnsettled : ContractId PlayerEntitlement
+      controller player
+      do
+        now <- getTime
+        assertMsg "kilit suresi henuz dolmadi" (now >= terms.lockExpiresAt)
+        recycleEntitlement this False now
+
+-- | Slotu geri yaratir. Sayilan bir dongude sayaclar artar; abort ve
+-- sure asimi yollarinda artmaz.
+recycleEntitlement : GameStake -> Bool -> Time -> Update (ContractId PlayerEntitlement)
+recycleEntitlement s counted nextAt =
+  create PlayerEntitlement with
+    venue = s.venue
+    operator = s.operator
+    venueId = s.venueId
+    mode = s.mode
+    player = s.player
+    concurrencyIndex = s.concurrencyIndex
+    tier = s.tier
+    policy = s.policy
+    custody = s.custody
+    instrumentId = s.terms.instrumentId
+    nextEligibleAt = nextAt
+    cyclesCompleted = if counted then s.cyclesCompletedBefore + 1 else s.cyclesCompletedBefore
+    lifetimeStaked =
+      if counted then s.lifetimeStakedBefore + s.terms.stakeAmount else s.lifetimeStakedBefore
+    auditor = s.auditor
+    meta = Metadata.emptyMetadata

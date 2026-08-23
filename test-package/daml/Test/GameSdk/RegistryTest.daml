@@ -1,0 +1,247 @@
+-- | Registry testleri: ad alani izolasyonu, kota, onayli basim, askiya alma.
+--
+-- Bu testlerin varlik sebebi: kiracilarin varliklari AYNI @admin@ altinda
+-- duruyor. Ad alani zorlamasi kirilirsa kiraci A, kiraci B'nin varligini
+-- basar — ve bu, ekosistem guveninin tek dayanagidir.
+module Test.GameSdk.RegistryTest where
+
+import DA.Optional (isNone, isSome)
+import DA.Time (seconds)
+import Daml.Script
+
+import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.MetadataV1 qualified as Metadata
+
+import ArCCade.GameSdk.Registry
+
+data Ctx = Ctx
+  with
+    admin : Party
+    operator : Party
+    tenantA : Party
+    tenantB : Party
+    player : Party
+    accountCid : ContractId PlayerAccount
+    registryCid : ContractId AssetRegistry
+
+setup : Script Ctx
+setup = do
+  admin <- allocateParty "Registry"
+  operator <- allocateParty "Operator"
+  tenantA <- allocateParty "TenantA"
+  tenantB <- allocateParty "TenantB"
+  player <- allocateParty "Player"
+  registryCid <- submit admin do
+    createCmd AssetRegistry with
+      admin; operator
+      registryId = "arccade-ecosystem-1"
+      meta = Metadata.emptyMetadata
+  accountCid <- submitMulti [player, admin] [] do
+    createCmd PlayerAccount with
+      admin; player; accountId = "acct-1"
+  pure Ctx with admin; operator; tenantA; tenantB; player; accountCid; registryCid
+
+mkRight : Ctx -> Text -> Party -> Int -> Script (ContractId TenantMintRight)
+mkRight c tenantId tenantParty quota =
+  submit c.admin do
+    exerciseCmd c.registryCid AssetRegistry_IssueMintRight with
+      tenantId; tenantParty
+      mintQuota = quota
+      quotaWindowSeconds = 3600
+
+inst : Ctx -> Text -> Holding.InstrumentId
+inst c localId = Holding.InstrumentId with admin = c.admin; id = localId
+
+-- | Kota dahilinde basim: kiraci kendi basina yapar.
+mintWithinQuota : Script ()
+mintWithinQuota = script do
+  c <- setup
+  r <- mkRight c "mygame" c.tenantA 3
+  (assetCid, r2) <- submitMulti [c.admin, c.tenantA] [] do
+    exerciseCmd r MintRight_Mint with
+      accountCid = c.accountCid
+      instrumentId = inst c "mygame/gold"
+      amount = 500.0
+      assetMeta = Metadata.emptyMetadata
+
+  a <- queryContractId c.player assetCid
+  case a of
+    Some asset -> do
+      assertMsg "sahip oyuncu olmali" (asset.holding.owner == c.player)
+      assertMsg "miktar dogru olmali" (asset.holding.amount == 500.0)
+      assertMsg "yeni basilan varlik kilitsiz olmali" (asset.holding.lock == None)
+    None -> abort "varlik bulunamadi"
+
+  right <- queryContractId c.admin r2
+  case right of
+    Some rr -> do
+      assertMsg "pencere sayaci artmali" (rr.mintedInWindow == 1)
+      assertMsg "toplam sayac artmali" (rr.totalMinted == 1)
+    None -> abort "basim hakki bulunamadi"
+
+-- | AD ALANI IZOLASYONU: kiraci baska kiracinin ad alaninda basamaz.
+cannotMintOutsideNamespace : Script ()
+cannotMintOutsideNamespace = script do
+  c <- setup
+  r <- mkRight c "mygame" c.tenantA 10
+  -- Kiraci A, kiraci B'nin ad alaninda basmaya calisiyor.
+  submitMultiMustFail [c.admin, c.tenantA] [] do
+    exerciseCmd r MintRight_Mint with
+      accountCid = c.accountCid
+      instrumentId = inst c "othergame/shield"
+      amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+
+-- | Ad alanisiz kimlik de reddedilir: onek zorunlu.
+cannotMintWithoutNamespace : Script ()
+cannotMintWithoutNamespace = script do
+  c <- setup
+  r <- mkRight c "mygame" c.tenantA 10
+  submitMultiMustFail [c.admin, c.tenantA] [] do
+    exerciseCmd r MintRight_Mint with
+      accountCid = c.accountCid
+      instrumentId = inst c "gold"          -- onek yok
+      amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+
+-- | Baska bir registry'nin admin'i adina varlik basilamaz.
+cannotMintForeignAdmin : Script ()
+cannotMintForeignAdmin = script do
+  c <- setup
+  r <- mkRight c "mygame" c.tenantA 10
+  foreign <- allocateParty "ForeignRegistry"
+  submitMultiMustFail [c.admin, c.tenantA] [] do
+    exerciseCmd r MintRight_Mint with
+      accountCid = c.accountCid
+      instrumentId = Holding.InstrumentId with admin = foreign; id = "mygame/gold"
+      amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+
+-- | KOTA: sinir dolunca serbest basim durur.
+quotaExhausted : Script ()
+quotaExhausted = script do
+  c <- setup
+  r0 <- mkRight c "mygame" c.tenantA 2
+  (_, r1) <- submitMulti [c.admin, c.tenantA] [] do
+    exerciseCmd r0 MintRight_Mint with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+  (_, r2) <- submitMulti [c.admin, c.tenantA] [] do
+    exerciseCmd r1 MintRight_Mint with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+  -- Ucuncu basim kotayi asar.
+  submitMultiMustFail [c.admin, c.tenantA] [] do
+    exerciseCmd r2 MintRight_Mint with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+
+-- | KOTA PENCERESI: sure gecince sayac sifirlanir.
+quotaWindowResets : Script ()
+quotaWindowResets = script do
+  c <- setup
+  r0 <- submit c.admin do
+    exerciseCmd c.registryCid AssetRegistry_IssueMintRight with
+      tenantId = "mygame"; tenantParty = c.tenantA
+      mintQuota = 1
+      quotaWindowSeconds = 60
+  (_, r1) <- submitMulti [c.admin, c.tenantA] [] do
+    exerciseCmd r0 MintRight_Mint with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+  submitMultiMustFail [c.admin, c.tenantA] [] do
+    exerciseCmd r1 MintRight_Mint with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+  passTime (seconds 61)
+  (_, r2) <- submitMulti [c.admin, c.tenantA] [] do
+    exerciseCmd r1 MintRight_Mint with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+  right <- queryContractId c.admin r2
+  case right of
+    Some rr -> assertMsg "pencere sifirlanmali" (rr.mintedInWindow == 1)
+    None -> abort "basim hakki bulunamadi"
+
+-- | ONAYLI BASIM: kota ustunde arCCade'in acik onayiyla.
+approvedMintBypassesQuota : Script ()
+approvedMintBypassesQuota = script do
+  c <- setup
+  r0 <- mkRight c "mygame" c.tenantA 0        -- serbest basim yok
+  submitMultiMustFail [c.admin, c.tenantA] [] do
+    exerciseCmd r0 MintRight_Mint with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+  -- arCCade onaylayarak basar.
+  (assetCid, _) <- submit c.admin do
+    exerciseCmd r0 MintRight_MintApproved with
+      accountCid = c.accountCid
+      instrumentId = inst c "mygame/gold"
+      amount = 1000.0
+      approvalReason = "lansman dagitimi"
+      assetMeta = Metadata.emptyMetadata
+  a <- queryContractId c.player assetCid
+  assertMsg "onayli basim varligi uretmeli" (isSome a)
+
+-- | Onayli basim da ad alanindan KACAMAZ.
+approvedMintStillNamespaced : Script ()
+approvedMintStillNamespaced = script do
+  c <- setup
+  r0 <- mkRight c "mygame" c.tenantA 10
+  submitMustFail c.admin do
+    exerciseCmd r0 MintRight_MintApproved with
+      accountCid = c.accountCid
+      instrumentId = inst c "othergame/shield"
+      amount = 1.0
+      approvalReason = "test"
+      assetMeta = Metadata.emptyMetadata
+
+-- | Onayli basim gerekce ISTER.
+approvedMintNeedsReason : Script ()
+approvedMintNeedsReason = script do
+  c <- setup
+  r0 <- mkRight c "mygame" c.tenantA 10
+  submitMustFail c.admin do
+    exerciseCmd r0 MintRight_MintApproved with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 1.0
+      approvalReason = ""
+      assetMeta = Metadata.emptyMetadata
+
+-- | ASKIYA ALMA: yeni basim durur, MEVCUT varliklar dokunulmaz kalir.
+suspensionStopsMintingNotOwnership : Script ()
+suspensionStopsMintingNotOwnership = script do
+  c <- setup
+  r0 <- mkRight c "mygame" c.tenantA 10
+  (assetCid, r1) <- submitMulti [c.admin, c.tenantA] [] do
+    exerciseCmd r0 MintRight_Mint with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 100.0
+      assetMeta = Metadata.emptyMetadata
+  r2 <- submit c.admin do
+    exerciseCmd r1 MintRight_SetSuspended with
+      newSuspended = True; reason = "inceleme"
+  submitMultiMustFail [c.admin, c.tenantA] [] do
+    exerciseCmd r2 MintRight_Mint with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 1.0
+      assetMeta = Metadata.emptyMetadata
+  -- Oyuncunun varligi hala yerinde.
+  a <- queryContractId c.player assetCid
+  assertMsg "askiya alma oyuncunun varligina dokunmaz" (isSome a)
+
+-- | Yakma sahip VE registry imzasi ister: registry tek basina yok edemez.
+burnNeedsOwner : Script ()
+burnNeedsOwner = script do
+  c <- setup
+  r0 <- mkRight c "mygame" c.tenantA 10
+  (assetCid, _) <- submitMulti [c.admin, c.tenantA] [] do
+    exerciseCmd r0 MintRight_Mint with
+      accountCid = c.accountCid; instrumentId = inst c "mygame/gold"; amount = 10.0
+      assetMeta = Metadata.emptyMetadata
+  reqCid <- submit c.player do
+    createCmd AssetBurnRequest with
+      admin = c.admin; owner = c.player; assetCid; reason = "kullanildi"
+  -- Registry TEK BASINA yakamaz.
+  submitMustFail c.admin do exerciseCmd reqCid BurnRequest_Execute
+  -- Ikisi birlikte yakar.
+  submitMulti [c.admin, c.player] [] do exerciseCmd reqCid BurnRequest_Execute
+  a <- queryContractId c.player assetCid
+  assertMsg "varlik yakilmis olmali" (isNone a)

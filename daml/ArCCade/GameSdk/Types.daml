@@ -1,0 +1,155 @@
+-- | Deger tipleri — bu modulde SABLON YOKTUR.
+--
+-- Paketin ihtiyac duyacagi her varyant bilerek 1.0.0'da tanimlaniyor:
+-- serilestirilebilir bir varyanta sonradan constructor eklemek bir upgrade
+-- sorusudur ve baski altinda cevaplanmasi en kotu sorulardan biridir.
+-- (Canton, vet edilmis bir surumden alan/choice cikarilmasini reddeder;
+-- ekleme de varyantlarda ayni katilikla degerlendirilir.)
+module ArCCade.GameSdk.Types where
+
+import DA.Text qualified as T
+
+import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.AllocationV1 qualified as Allocation
+
+-- | Degerin nasil tutuldugu.
+--
+-- 1.0.0'da CANLI mekanik yalnizca @TimeLockedHolding@'dir: @AmuletRules_Transfer@
+-- ciktisina @TimeLock@ konarak yaratilan gercek bir @LockedAmulet@. Bu secim
+-- rastgele degil — token standardi @Allocation@ V1'de @Allocation_Withdraw@'in
+-- controller'i tek basina gonderendir, yani o bir REZERVASYONDUR, kilit degil;
+-- komiteye "lock" diye sunulmasi yanlis olur. @LockedAmulet_UnlockV2@'nin
+-- controller'i ise @amulet.owner :: lock.holders@: sure dolmadan hicbir taraf
+-- tek basina parayi oynatamaz, sure dolunca oyuncu @OwnerExpireLockV2@ ile
+-- arCCade'e de DSO'ya da ihtiyac duymadan parasina doner.
+--
+-- @TokenAllocation@ tipte duruyor ama fail-closed: custody dogrulamasi bu
+-- mekanikle cagrilirsa reddeder. Sinir simdiden kesilmis olsun diye var.
+data CustodyMechanic
+  = TimeLockedHolding
+  | TokenAllocation
+  deriving (Eq, Show)
+
+-- | Settlement sirasinda custody kanitina isaret eden referans.
+data CustodyRef
+  = HoldingRef (ContractId Holding.Holding)
+  | AllocationRef (ContractId Allocation.Allocation)
+  | NoRef
+  deriving (Eq, Show)
+
+-- | Bir dongunun nasil kapandigi. Settlement'ta yalnizca ilk uc tanesi gecerlidir;
+-- son ikisi istisna yollarina aittir.
+data Disposition
+  = ReturnedInFull
+  | ReturnedWithForfeit
+  | ForfeitedInFull
+  | Aborted
+  | ExpiredUnsettled
+  deriving (Eq, Show)
+
+dispositionTag : Disposition -> Text
+dispositionTag ReturnedInFull = "returned-in-full"
+dispositionTag ReturnedWithForfeit = "returned-with-forfeit"
+dispositionTag ForfeitedInFull = "forfeited-in-full"
+dispositionTag Aborted = "aborted"
+dispositionTag ExpiredUnsettled = "expired-unsettled"
+
+-- | Venue'nun calisma kipi.
+--
+-- @ModeDryRun@, custody kaniti gerektirmeden tum yasam dongusunun
+-- calistirilabilmesi icindir — TestNet'te cuzdanda 0 CC varken SDK'nin
+-- ucdan uca gosterilebilmesini saglar. Kuru kosum donguleri raporlamada
+-- AYRI sinifta sayilir ve nitelikli faaliyet olarak SUNULMAMALIDIR.
+data VenueMode
+  = ModeLive
+  | ModeDryRun
+  deriving (Eq, Show)
+
+modeTag : VenueMode -> Text
+modeTag ModeLive = "live"
+modeTag ModeDryRun = "dry-run"
+
+-- | Venue politikasi. Her stake'e anlik goruntusu (snapshot) olarak yazilir,
+-- boylece sonradan yapilan bir politika degisikligi acik bir donguye uzanamaz.
+data VenuePolicy = VenuePolicy
+  with
+    minStakeAmount : Decimal
+    maxStakeAmount : Decimal
+    minPlatformFee : Decimal
+      -- ^ S3'un tabani: iade edilmeyen, sonuc olusmadan once harcanan maruziyet.
+    maxPayoutAmount : Decimal
+    minLockSeconds : Int
+    maxLockSeconds : Int
+    minCycleSeconds : Int
+    maxCycleSeconds : Int
+    cooldownSeconds : Int
+    abortCooldownSeconds : Int
+    concurrencyLimit : Int
+    requireCustodyProof : Bool
+  deriving (Eq, Show)
+
+-- | Tek bir dongunun anlasilan sartlari.
+data StakeTerms = StakeTerms
+  with
+    stakeAmount : Decimal
+    feeAmount : Decimal
+    feeReceiver : Party
+    instrumentId : Holding.InstrumentId
+    custody : CustodyMechanic
+    lockHolders : [Party]
+    lockExpiresAt : Time
+    custodyTag : Text
+      -- ^ @TimeLock.optContext@'e yazilan deger; bkz. 'custodyTagFor'.
+  deriving (Eq, Show)
+
+-- | Bir oyuncuya slot verirken kullanilan parametre demeti.
+data EntitlementGrant = EntitlementGrant
+  with
+    player : Party
+    concurrencyIndex : Int
+    tier : Text
+  deriving (Eq, Show)
+
+-- | Kuru kosum venue'larinin venueId oneki.
+--
+-- Kip ayrimi yalnizca bir enum alanina birakilmaz: kuru kosum venue'lari
+-- kimliklerinden de taninir. Boylece raporlama hattı Daml enum'unu okumayi
+-- unutsa bile nitelikli olmayan faaliyet ayirt edilebilir kalir.
+dryRunVenuePrefix : Text
+dryRunVenuePrefix = "dryrun-"
+
+-- | Custody etiketinin sabit oneki.
+custodyTagPrefix : Text
+custodyTagPrefix = "arccade-game-sdk:1:"
+
+-- | Kilit baglaminda tasinan etiket: @arccade-game-sdk:1:\<cycleId\>:\<entryDigest\>@.
+--
+-- Bu deger @TimeLock.optContext@ icine yazilir ve @LockedAmulet@ uzerinde —
+-- imzacilari arasinda DSO bulunan bir kontratta — aynen saklanir. Standart
+-- @HoldingView.lock.context@ alanindan gorunur oldugu icin dongunun kimligi
+-- ve giris commitment'i, HICBIR arCCade kontrati okunmadan, yalnizca registry
+-- verisinden dogrulanabilir. S6'nin cevabi budur.
+--
+-- Uzunluk siniri: 19 (onek) + <=64 (cycleId) + 1 + 64 (digest) = <=148 karakter.
+custodyTagFor : Text -> Text -> Text
+custodyTagFor cycleId entryDigest =
+  custodyTagPrefix <> cycleId <> ":" <> entryDigest
+
+-- | Dongu kimligi kurallari: bos olmamali, 64 karakteri asmamali ve etiket
+-- ayraclarini (@:@, @|@) icermemeli — aksi halde etiket ayristirilamaz olur.
+isValidCycleId : Text -> Bool
+isValidCycleId c =
+  T.length c > 0
+    && T.length c <= 64
+    && not (T.isInfixOf ":" c)
+    && not (T.isInfixOf "|" c)
+
+-- | 64 karakterlik kucuk harf sha256 hex kontrolu.
+isHex64 : Text -> Bool
+isHex64 h =
+  T.length h == 64
+    && all (\c -> T.isInfixOf c "0123456789abcdef") (T.explode h)
+
+-- | Digest algoritma kimligi; @GameStake.digestAlg@ alanina yazilir.
+digestAlgId : Text
+digestAlgId = "arccade-sdk-digest-v1/sha256"

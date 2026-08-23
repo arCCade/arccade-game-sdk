@@ -1,0 +1,20 @@
+{
+  "name": "@arccade/game-sdk",
+  "version": "1.1.0",
+  "description": "arCCade Game SDK — Canton Network uzerinde iki-yazmalik oyun dongusu: deger taahhudu + settlement",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": ["src", "index.d.ts", "README.md"],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "keywords": ["canton", "splice", "daml", "gaming", "featured-app"],
+  "license": "UNLICENSED"
+}

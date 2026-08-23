@@ -1,0 +1,109 @@
+-- | Altin vektorler — diller arasi parite testi.
+--
+-- Buradaki sabitler BAGIMSIZ olarak Python ile uretilmistir
+-- (@tools/digest_reference.py@). Daml tarafi ayni degeri uretmezse test
+-- kirilir. Java portu da ayni sabitleri dogrulamak ZORUNDADIR; CI uc
+-- implementasyondan biri sapinca kirilmalidir.
+--
+-- Bu testin varlik sebebi somut: commitment semasinin degeri, ucuncu bir
+-- tarafin yayinlanan belgeye duz @sha256sum@ calistirip ayni digest'i
+-- bulabilmesine dayanir. Parite bozulursa S6 iddiasi coker.
+module Test.GameSdk.VectorsTest where
+
+import DA.Assert ((===))
+import DA.Date (date, Month(Jan))
+import DA.Time (time)
+import Daml.Script
+
+import ArCCade.GameSdk.Digest
+import ArCCade.GameSdk.Games.PixelRace qualified as PR
+import ArCCade.GameSdk.Games.TradeWars qualified as TW
+
+-- | En basit durum: sabit bir metnin digest'i, ham baytlarinin sha256'si olmali.
+--
+-- Kabuktan dogrulama:
+--   printf 'arccade' | sha256sum
+plainTextDigest : Script ()
+plainTextDigest = script do
+  textDigest "arccade"
+    === "140f371fce01eea5068da54d3de6bb719d68dc325f494be284ce56a52da44079"
+
+-- | Kanonik kodlamanin kendisi — hash'ten bagimsiz olarak dogrulanir.
+-- Bu, parite kirildiginda sorunun kodlamada mi hash'te mi oldugunu ayirir.
+canonicalEncoding : Script ()
+canonicalEncoding = script do
+  canonText "abc" === "t:3:abc"
+  canonInt 42 === "i:2:42"
+  canonBool True === "b:4:true"
+  canonBool False === "b:5:false"
+  -- Decimal tamsayi 1e-10 birimine cevrilir, islenmis ondalik olarak degil.
+  canonDecimal 1.5 === "d:11:15000000000"
+  canonDecimal 0.0 === "d:1:0"
+  -- Zaman epoch mikrosaniyesi; ISO metni degil.
+  canonTime (time (date 1970 Jan 1) 0 0 1) === "m:7:1000000"
+  canonOptional canonText None === "o:0:"
+  canonOptional canonText (Some "x") === "o:5:t:1:x"
+  canonList ["a", "b"] === "l:5:2:a|b"
+  canonList [] === "l:2:0:"
+  -- Alanlar ADA gore siralanir: giris sirasi digest'i degistirmez.
+  canonFields [("b", "2"), ("a", "1")] === canonFields [("a", "1"), ("b", "2")]
+
+-- | Tutar donusumu: gidis-donus guvenli, tamsayi 1e-10 birimi.
+amountConversion : Script ()
+amountConversion = script do
+  amountUnits 1.0 === 10000000000
+  amountUnits 12.3456789012 === 123456789012
+  amountUnits 0.0 === 0
+  amountUnits 0.0000000001 === 1
+  amountUnits (-1.5) === -15000000000
+
+-- | Trade Wars ornek giris belgesi.
+sampleTwEntry : TW.TradeWarsEntry
+sampleTwEntry = TW.TradeWarsEntry with
+  cycleId = "tw-sample-1"
+  tier = "silver"
+  virtualBalance = 10000.0
+  allocations =
+    [ TW.AssetAllocation with symbol = "BTC"; allocationPercent = 60.0
+    , TW.AssetAllocation with symbol = "ETH"; allocationPercent = 40.0
+    ]
+  entryPrices =
+    [ TW.PricePoint with
+        symbol = "BTC"; price = 60000.0; source = "binance"
+        asOf = time (date 1970 Jan 1) 0 0 1
+    , TW.PricePoint with
+        symbol = "ETH"; price = 3000.0; source = "binance"
+        asOf = time (date 1970 Jan 1) 0 0 1
+    ]
+
+samplePrEntry : PR.PixelRaceEntry
+samplePrEntry = PR.PixelRaceEntry with
+  cycleId = "pr-sample-1"
+  tier = "bronze"
+  maxGamesPerSession = 3
+  rngSeedCommit = "0000000000000000000000000000000000000000000000000000000000000000"
+
+-- | Belgelerin kanonik METNI — Python ile bayt bayt ayni olmali.
+-- Digest'ten once metni dogrulamak, hata ayiklamayi cok kolaylastirir.
+documentTexts : Script ()
+documentTexts = script do
+  debug ("TW_ENTRY_DOC=" <> TW.entryDocument sampleTwEntry)
+  debug ("PR_ENTRY_DOC=" <> PR.entryDocument samplePrEntry)
+  pure ()
+
+-- | ALTIN VEKTORLER — pariteyi fiilen ZORLAYAN test.
+--
+-- Bu sabitler @tools/digest_reference.py@ tarafindan BAGIMSIZ olarak
+-- uretilmistir. Daml tarafinda kodlamayi bozan herhangi bir degisiklik burada
+-- kirilir. Onceki surumde bu degerler yalnizca @debug@ ile basiliyordu, yani
+-- digest'i bozan uc ayri mutasyon 16/16 testten gecebiliyordu — inceleme bunu
+-- yakaladi ve asagidaki iki assert o bosluğu kapatiyor.
+--
+-- Java portu ayni iki sabiti dogrulamak ZORUNDADIR; CI uc implementasyondan
+-- biri sapinca kirilmali.
+goldenVectors : Script ()
+goldenVectors = script do
+  TW.entryDigest sampleTwEntry
+    === "5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
+  PR.entryDigest samplePrEntry
+    === "0b2349e05633cf279ca0ee1d3f5efd8b2308f3e2ee947a32f5c3397e456d0204"
