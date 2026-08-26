@@ -74,9 +74,21 @@ fullCycle = script do
       assertMsg "cooldown ileri alinmali" (e.nextEligibleAt > now)
     None -> abort "geri verilen entitlement bulunamadi"
 
--- | Ayni slot uzerinde ikinci es zamanli dongu LEDGER tarafindan reddedilir.
-concurrencyEnforced : Script ()
-concurrencyEnforced = script do
+-- | Bir entitlement TEK KULLANIMLIKTIR: commit onu arsivler, ikinci commit
+-- ledger tarafindan reddedilir.
+--
+-- ADI ONEMLI. Bu test es zamanliligi KANITLAMAZ ve bir sure "concurrencyEnforced"
+-- adini tasidi; o ad, kanitlanmamis bir garantinin kanitlanmis gorunmesine yol
+-- acti. GameVenue_IssueEntitlements yalnizca `0 <= concurrencyIndex <
+-- concurrencyLimit` araligini denetler: tutulan entitlement SAYISINA ve
+-- indekslerin BENZERSIZLIGINE bakmaz. Yani venue ayni indeksle sinirsiz slot
+-- basabilir ve her biri burada oldugu gibi tek kullanimlik olur; toplam acik
+-- dongu sayisi yine sinirsizdir.
+--
+-- Gercek es zamanlilik siniri 1.4.0'da pakete girecek. O gune kadar sinir
+-- servis katmanindadir ve zincir garantisi olarak ANLATILMAMALIDIR.
+entitlementIsSingleUse : Script ()
+entitlementIsSingleUse = script do
   p <- allocParties
   venueCid <- mkVenue p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid

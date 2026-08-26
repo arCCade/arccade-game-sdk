@@ -4,6 +4,11 @@
 .daml/
 *.dar
 
+# ...but the vendored Splice interface DARs ARE source: they are what makes a
+# clone buildable with no setup, and what makes the build reproducible against
+# the bytes that were vetted.
+!vendor/**/*.dar
+
 node_modules/
 .DS_Store
 *.log
