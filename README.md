@@ -1,4 +1,4 @@
-# Canton Gaming SDK
+# Gaming SDK for Canton
 
 Contracts and client libraries for putting game economies on Canton, built
 around one idea: **write few things on-chain, and make each one mean
@@ -13,11 +13,14 @@ Network Token Standard — `HoldingV1`, `AllocationV1`, `TransferInstructionV1`.
     Daml SDK    3.4.10 (LF 2.1)
     network     vetted on Canton TestNet, settling real Canton Coin
 
-The Daml package is still named `arccade-game-sdk`, and deliberately so: a
-package rename is not an upgrade. Daml upgrades require an unchanged package
-name, so a rename starts a new lineage and every live contract has to be
-re-created under it. The rename lands with 1.4.0, at the next vetting, where
-that cost is already being paid.
+Built and maintained by arCCade, and open to the ecosystem.
+
+The Daml package keeps the name `arccade-game-sdk`, permanently. It names its
+contributor rather than the network, which is the right way round: a package
+called after Canton would read as though the Canton Foundation published it.
+Keeping the name also keeps the upgrade lineage — Daml upgrades require an
+unchanged package name, so renaming would start a new lineage and force every
+live contract to be re-created under it.
 
 ## Layout
 
