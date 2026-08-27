@@ -51,7 +51,31 @@ export {
   amountUnits,
   textDigest,
   toMicros,
+  merkleEmpty,
+  merkleNode,
+  merklePairUp,
+  merkleRoot,
+  merkleProof,
+  merkleFold,
+  merkleVerify,
+  periodLeaf,
+  periodLeafDocument,
+  periodRowVerify,
+  assertDisposition,
+  DISPOSITIONS,
 } from './digest.js'
+
+// Ledger'in transaction TREE akisindan rapor satiri kurmak. Kurallar
+// `test-vectors/` altindaki fixture'da yasar; bu, ona uyan uygulamalardan
+// biridir.
+export {
+  REPORT_ORDER,
+  closingFacts,
+  commitFacts,
+  isoToMicros,
+  rowsFromTransactions,
+  toLeafRow,
+} from './cycleAudit.js'
 
 export {
   CUSTODY_TAG_PREFIX,
