@@ -18,6 +18,55 @@
 | Backend entegrasyonu (commitment/settlement yolu, Pixel Race stake-at-start) | **YAZILMADI** |
 | Canli custody (gercek `LockedAmulet`) | **KOSULMADI** — TestNet cuzdaninda 0 CC var; mekanik MainNet'te zaten calisiyor |
 
+## DONEM CAPASI — TESTNET'TE OLCULEN SINIRLAR (27 Agu 2026)
+
+`GameVenue_AnchorPeriod` uzerinde `rows` bir choice argumanidir: ACS'ye
+girmez ama islem yukunde tasinir ve yorumlama O(N) sha256'dir. Sinirin ne
+oldugunu tahmin etmek yerine olctuk. `dryrun-pixelforge-arena-v2` uzerinde,
+1.5.0 paket kimligiyle:
+
+| satir | yuk | sonuc |
+|---|---|---|
+| 0 (bos donem) | — | gecti, kok = altin vektordeki `merkleEmpty` |
+| 1.000 | 634 KB | gecti, ~20 sn |
+| 2.000 | 1,27 MB | gecti |
+| 4.000 | 2,53 MB | gecti, ~62 sn — SINIRDA |
+| 8.000 | 5,06 MB | **INTERPRETATION_TIME_EXCEEDED**, reddedildi |
+
+SINIR YUK DEGIL, SURE. Canton yorumlamayi Ledger Effective Time + 1 dakika
+tolerans icinde bitirmek zorunda; 8.000 satir bu butceyi asti ve islem TEMIZ
+bicimde reddedildi (yarim yazma yok). Spesifikasyondaki 1.000 dongu/gun rahat
+geciyor. Guvenli tavan: **capa basina ~2.000 satir**. Daha buyuk venue'lar
+donemi bolmelidir — `periodId` gun icinde parcalanabilir, zincir bozulmaz.
+
+UPGRADE YOLU CALISIYOR. Capa 1.4.0 ile yaratilmis bir `GameVenue` kontrati
+uzerinde, 1.5.0 paket kimligi verilerek cagrildi ve calisti. Yani mevcut
+venue'lari yeniden yaratmaya gerek yok.
+
+### MUKERRER CAPA TUZAGI — anchoring job'i yazmadan once okuyun
+
+JSON Ledger API'nin **HTTP 503'u pekko-http'nin ISTEK ZAMAN ASIMIDIR** (~20
+sn) ve islemin kaderi hakkinda HICBIR SEY soylemez. Olcumde hem 2.000 hem
+4.000 satirlik capalar 503 dondukten SONRA ledger'a yazildi. Ayni tuzak DAR
+yuklemede de yasandi: 503 alindi, paket yuklenmisti.
+
+503'te yeniden gonderen bir is, ayni donem icin IKINCI bir capa yaratir.
+Sonuc sessizdir: kontrat mukerrer `periodId`'yi engellemez (yalnizca bir
+donem ICINDE mukerrer `cycleId`'yi engeller), dolayisiyla zincirde iki farkli
+`anchorDigest` tasiyan iki halka olusur ve denetci hangisinin gecerli
+oldugunu bilemez.
+
+Anchoring job'i icin iki sart:
+1. Donem basina **deterministik `commandId`** kullan (`<venueId>:<periodId>`
+   gibi) — Canton'un komut tekilligi is birligi yapsin. Varsayilan tekillik
+   penceresi 30 saniyedir, yani tek basina yetmez.
+2. Yeniden gondermeden once o `periodId` icin ACS'yi **sorgula**. HTTP
+   durumu degil, ledger karar verir.
+
+Buna bagli olarak: capa isini `submit-and-wait-for-transaction` ile kurmak
+buyuk donemlerde her zaman 503 gorecektir. Dogru desen, asenkron gonderim ve
+ardindan ACS/completion takibidir.
+
 ## 1.0.0'da bulunan ve 1.1.0'da duzeltilen kusur
 
 Dusmanca inceleme (63 ajan), `GameVenue.ensure`'un spesifikasyondaki kip
