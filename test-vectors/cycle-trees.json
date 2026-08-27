@@ -1,0 +1,1256 @@
+{
+  "note": "Real transactions captured from the arCCade TestNet validator with TRANSACTION_SHAPE_LEDGER_EFFECTS. Party ids and contract ids are verbatim: an anonymised fixture would stop being evidence that an implementation handles what the ledger actually emits.",
+  "capturedAtOffset": 116327,
+  "ledgerApiVersion": "3.5.12",
+  "cases": [
+    {
+      "closingChoice": "GameStake_Settle",
+      "stakeContractId": "00b43f402c7c96bebc463a9b4aea93d482420b352acc25521673c69fc6f6fffa1fca121220d3861af1a4ede6db38f7b7da136e046628fe24ac8316972ca4afc5c398c3c82b",
+      "commitTransaction": {
+        "updateId": "1220e958bc1ee37993f52a255ad56d6ced4be9e91f6748891bc6025ae9552ef3e214",
+        "commandId": "commit-1787437747",
+        "workflowId": "",
+        "effectiveAt": "2026-08-22T22:29:07.372202Z",
+        "events": [
+          {
+            "ExercisedEvent": {
+              "offset": 87427,
+              "nodeId": 0,
+              "contractId": "00a44768b7c47772190f62c84c536cde9a2aa9f912aaca35498a678ae7b1505b1bca121220a2303fc5420b1f92e80ffb0382332455803dd073e8424e29e28db955c316e3f4",
+              "templateId": "344ce4ef44a52900ce95dad73bc098ce4d91b4f5416435bc53d62c208266559b:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+              "interfaceId": null,
+              "choice": "Entitlement_Commit",
+              "choiceArgument": {
+                "gameCode": "trade-wars-v4",
+                "cycleId": "tw-testnet-1787437747",
+                "terms": {
+                  "stakeAmount": "100.0000000000",
+                  "feeAmount": "0.5000000000",
+                  "feeReceiver": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "instrumentId": {
+                    "admin": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                    "id": "Amulet"
+                  },
+                  "custody": "TimeLockedHolding",
+                  "lockHolders": [
+                    "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+                  ],
+                  "lockExpiresAt": "2026-08-23T00:29:07Z",
+                  "custodyTag": "arccade-game-sdk:1:tw-testnet-1787437747:5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
+                },
+                "entryDigest": "5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852",
+                "stakeMeta": {
+                  "values": {}
+                }
+              },
+              "actingParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "consuming": true,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 1,
+              "exerciseResult": "00b43f402c7c96bebc463a9b4aea93d482420b352acc25521673c69fc6f6fffa1fca121220d3861af1a4ede6db38f7b7da136e046628fe24ac8316972ca4afc5c398c3c82b",
+              "packageName": "arccade-game-sdk",
+              "implementedInterfaces": [],
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 87427,
+              "nodeId": 1,
+              "contractId": "00b43f402c7c96bebc463a9b4aea93d482420b352acc25521673c69fc6f6fffa1fca121220d3861af1a4ede6db38f7b7da136e046628fe24ac8316972ca4afc5c398c3c82b",
+              "templateId": "344ce4ef44a52900ce95dad73bc098ce4d91b4f5416435bc53d62c208266559b:ArCCade.GameSdk.Cycle:GameStake",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "venue": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "operator": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "venueId": "arccade-games-dryrun-1",
+                "mode": "ModeDryRun",
+                "player": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "gameCode": "trade-wars-v4",
+                "cycleId": "tw-testnet-1787437747",
+                "concurrencyIndex": "0",
+                "tier": "silver",
+                "policy": {
+                  "minStakeAmount": "10.0000000000",
+                  "maxStakeAmount": "1000.0000000000",
+                  "minPlatformFee": "0.0100000000",
+                  "maxPayoutAmount": "500.0000000000",
+                  "minLockSeconds": "60",
+                  "maxLockSeconds": "172800",
+                  "minCycleSeconds": "10",
+                  "maxCycleSeconds": "7200",
+                  "cooldownSeconds": "30",
+                  "abortCooldownSeconds": "300",
+                  "concurrencyLimit": "1",
+                  "requireCustodyProof": false
+                },
+                "custody": "TimeLockedHolding",
+                "terms": {
+                  "stakeAmount": "100.0000000000",
+                  "feeAmount": "0.5000000000",
+                  "feeReceiver": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "instrumentId": {
+                    "admin": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                    "id": "Amulet"
+                  },
+                  "custody": "TimeLockedHolding",
+                  "lockHolders": [
+                    "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+                  ],
+                  "lockExpiresAt": "2026-08-23T00:29:07Z",
+                  "custodyTag": "arccade-game-sdk:1:tw-testnet-1787437747:5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
+                },
+                "committedAt": "2026-08-22T22:29:07.372202Z",
+                "entryDigest": "5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852",
+                "digestAlg": "arccade-sdk-digest-v1/sha256",
+                "policyHash": "ba3d47bd69ad6fcb3826a96975e48e645df4f3f6fb334a52edb64d4cce1d0d43",
+                "cyclesCompletedBefore": "0",
+                "lifetimeStakedBefore": "0.0000000000",
+                "auditor": null,
+                "meta": {
+                  "values": {}
+                }
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-22T22:29:07.372202Z",
+              "packageName": "arccade-game-sdk",
+              "representativePackageId": "344ce4ef44a52900ce95dad73bc098ce4d91b4f5416435bc53d62c208266559b",
+              "acsDelta": true
+            }
+          }
+        ],
+        "offset": 87427,
+        "synchronizerId": "global-domain::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+        "traceContext": {
+          "traceparent": "00-b40373b5c622767e6cb659bb5dd31a7e-5a6580558409948b-03",
+          "tracestate": null
+        },
+        "recordTime": "2026-08-22T22:29:08.269974Z",
+        "externalTransactionHash": null,
+        "paidTrafficCost": 3248
+      },
+      "closingTransaction": {
+        "updateId": "122040409105e30728f4987bcb23f91e9f758a1d43d1630cffb77a49bd87e9374735",
+        "commandId": "settle-1787437775",
+        "workflowId": "",
+        "effectiveAt": "2026-08-22T22:29:35.189712Z",
+        "events": [
+          {
+            "ExercisedEvent": {
+              "offset": 87434,
+              "nodeId": 0,
+              "contractId": "00b43f402c7c96bebc463a9b4aea93d482420b352acc25521673c69fc6f6fffa1fca121220d3861af1a4ede6db38f7b7da136e046628fe24ac8316972ca4afc5c398c3c82b",
+              "templateId": "344ce4ef44a52900ce95dad73bc098ce4d91b4f5416435bc53d62c208266559b:ArCCade.GameSdk.Cycle:GameStake",
+              "interfaceId": null,
+              "choice": "GameStake_Settle",
+              "choiceArgument": {
+                "disposition": "ReturnedInFull",
+                "returnedAmount": "100.0000000000",
+                "forfeitedAmount": "0.0000000000",
+                "payoutAmount": "0.0000000000",
+                "outcomeDigest": "124de70ecc959cfe2d9f01362a414e9a493df2e10b521551ffd262c1f29d2f0a",
+                "revealedOutcome": "arccade-sdk-digest-v1|t:26:arccade-trade-wars-outcomei:1:1r:9:k:8:cycle-id=t:21:tw-testnet-1787437747;",
+                "revealedEntry": null,
+                "custodyRef": null,
+                "settlementMeta": {
+                  "values": {}
+                }
+              },
+              "actingParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "consuming": true,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 1,
+              "exerciseResult": "006111292987e2ccddd31f320dc63346ef8f6c20d36a8e61c5d8ac81e25f5edfdbca121220d215c8612fb8d37e333a529e408ab92f44781c4d394d4195244037332aab6be1",
+              "packageName": "arccade-game-sdk",
+              "implementedInterfaces": [],
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 87434,
+              "nodeId": 1,
+              "contractId": "006111292987e2ccddd31f320dc63346ef8f6c20d36a8e61c5d8ac81e25f5edfdbca121220d215c8612fb8d37e333a529e408ab92f44781c4d394d4195244037332aab6be1",
+              "templateId": "344ce4ef44a52900ce95dad73bc098ce4d91b4f5416435bc53d62c208266559b:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "venue": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "operator": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "venueId": "arccade-games-dryrun-1",
+                "mode": "ModeDryRun",
+                "player": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "concurrencyIndex": "0",
+                "tier": "silver",
+                "policy": {
+                  "minStakeAmount": "10.0000000000",
+                  "maxStakeAmount": "1000.0000000000",
+                  "minPlatformFee": "0.0100000000",
+                  "maxPayoutAmount": "500.0000000000",
+                  "minLockSeconds": "60",
+                  "maxLockSeconds": "172800",
+                  "minCycleSeconds": "10",
+                  "maxCycleSeconds": "7200",
+                  "cooldownSeconds": "30",
+                  "abortCooldownSeconds": "300",
+                  "concurrencyLimit": "1",
+                  "requireCustodyProof": false
+                },
+                "custody": "TimeLockedHolding",
+                "instrumentId": {
+                  "admin": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "id": "Amulet"
+                },
+                "nextEligibleAt": "2026-08-22T22:30:05.189712Z",
+                "cyclesCompleted": "1",
+                "lifetimeStaked": "100.0000000000",
+                "auditor": null,
+                "meta": {
+                  "values": {}
+                }
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-22T22:29:35.189712Z",
+              "packageName": "arccade-game-sdk",
+              "representativePackageId": "344ce4ef44a52900ce95dad73bc098ce4d91b4f5416435bc53d62c208266559b",
+              "acsDelta": true
+            }
+          }
+        ],
+        "offset": 87434,
+        "synchronizerId": "global-domain::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+        "traceContext": {
+          "traceparent": "00-f6339f307221fef830155fe073c25751-d34c04b756484a86-03",
+          "tracestate": null
+        },
+        "recordTime": "2026-08-22T22:29:36.074711Z",
+        "externalTransactionHash": null,
+        "paidTrafficCost": 3365
+      }
+    },
+    {
+      "closingChoice": "GameStake_Abort",
+      "stakeContractId": "006e2a6b4177eb6c73af812551b8262bae071cf298a801c16bf858a3d08d3153b5ca121220cfa35bf898e64cfae3811c5862b624ff4a98468f60fcd2e8cdff5e2323a32c6d",
+      "commitTransaction": {
+        "updateId": "122071d3ef541eebc4d3588f2b8b05b1d7fa2416a5954c27adb9149b290edfc980ab",
+        "commandId": "game-1787572989431-8xuglt",
+        "workflowId": "",
+        "effectiveAt": "2026-08-24T12:03:09.534518Z",
+        "events": [
+          {
+            "ExercisedEvent": {
+              "offset": 96739,
+              "nodeId": 0,
+              "contractId": "002ffec67ef4c651456505b615a83c12c8a1d4f7596569617310637b73a1a31551ca121220b8c70bc69c2c43d55adef37e61d6d12f6c6ead8d46404cad160e5b8cfd919979",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.AmuletRules:AmuletRules",
+              "interfaceId": null,
+              "choice": "AmuletRules_Transfer",
+              "choiceArgument": {
+                "transfer": {
+                  "sender": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "provider": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "inputs": [
+                    {
+                      "tag": "InputAmulet",
+                      "value": "00eca535bb3ccd36d5433a78f0f637bc6b40f8d2105c087c3584b7d1efbaeb1decca12122047733c6e4d834daea5c0a2d1e22741b912bfe201e70896d8ff2a5dc9280a19a1"
+                    }
+                  ],
+                  "outputs": [
+                    {
+                      "receiver": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                      "receiverFeeRatio": "0.0000000000",
+                      "amount": "0.0100000000"
+                    },
+                    {
+                      "receiver": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                      "receiverFeeRatio": "0.0000000000",
+                      "amount": "30.0000000000",
+                      "lock": {
+                        "holders": [
+                          "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+                        ],
+                        "expiresAt": "2026-08-24T15:03:08.968Z",
+                        "optContext": "arccade-game-sdk:1:pr-livetest-20260824:fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+                      }
+                    }
+                  ]
+                },
+                "context": {
+                  "openMiningRound": "00b41279702196a3d73a4c41120ee1c53ffd52eb3067874d2039f744cc890cbb98ca1212209bef1e02d46b4312d05d79a0d3def23cc14268222b224c133d1212b986b3c6d8",
+                  "issuingMiningRounds": [],
+                  "validatorRights": []
+                },
+                "expectedDso": "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337"
+              },
+              "actingParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "consuming": false,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 7,
+              "exerciseResult": {
+                "round": {
+                  "number": "111324"
+                },
+                "summary": {
+                  "inputAppRewardAmount": "0.0000000000",
+                  "inputValidatorRewardAmount": "0.0000000000",
+                  "inputSvRewardAmount": "0.0000000000",
+                  "inputAmuletAmount": "1700.0000000000",
+                  "balanceChanges": [
+                    [
+                      "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                      {
+                        "changeToInitialAmountAsOfRoundZero": "32.2649765196",
+                        "changeToHoldingFeesRate": "0.0002896941"
+                      }
+                    ]
+                  ],
+                  "holdingFees": "0.0000000000",
+                  "outputFees": [
+                    "0.0000000000",
+                    "0.0000000000"
+                  ],
+                  "senderChangeFee": "0.0000000000",
+                  "senderChangeAmount": "1669.9900000000",
+                  "amuletPrice": "0.1268340000",
+                  "inputValidatorFaucetAmount": "0.0000000000",
+                  "inputUnclaimedActivityRecordAmount": "0.0000000000",
+                  "inputDevelopmentFundAmount": "0.0000000000"
+                },
+                "createdAmulets": [
+                  {
+                    "tag": "TransferResultAmulet",
+                    "value": "00d8ce5010ee0440f86f3fd0867e6bea29dc186909ad81d7a751633bc9214ab460ca121220a1622e7f6a05c15c1e487e43da04e4b2a1faee9866957ac9415799aa3ed8574b"
+                  },
+                  {
+                    "tag": "TransferResultLockedAmulet",
+                    "value": "006955edc41e97eedf4db21c6cb77434240bf5d4fd3610907729c3e316c9c09d5fca121220077c4ba4e402111a58263d73172bf23dac26d5cbc27b0f0f51ce4142b2cfa982"
+                  }
+                ],
+                "senderChangeAmulet": "003a935fc22a0adefca89956755f72d5e0f857d204208d95a9bfc993f552e593e2ca12122091f4ee2553c10465ccc5a1f2e23e0160afb60670586ad2c5614a9ef3bd0fb4a9",
+                "meta": {
+                  "values": {
+                    "splice.lfdecentralizedtrust.org/tx-kind": "merge-split"
+                  }
+                }
+              },
+              "packageName": "splice-amulet",
+              "implementedInterfaces": [],
+              "acsDelta": false
+            }
+          },
+          {
+            "ExercisedEvent": {
+              "offset": 96739,
+              "nodeId": 3,
+              "contractId": "00eca535bb3ccd36d5433a78f0f637bc6b40f8d2105c087c3584b7d1efbaeb1decca12122047733c6e4d834daea5c0a2d1e22741b912bfe201e70896d8ff2a5dc9280a19a1",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.Amulet:Amulet",
+              "interfaceId": null,
+              "choice": "Archive",
+              "choiceArgument": {},
+              "actingParties": [
+                "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "consuming": true,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 3,
+              "exerciseResult": {},
+              "packageName": "splice-amulet",
+              "implementedInterfaces": [],
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 96739,
+              "nodeId": 4,
+              "contractId": "00d8ce5010ee0440f86f3fd0867e6bea29dc186909ad81d7a751633bc9214ab460ca121220a1622e7f6a05c15c1e487e43da04e4b2a1faee9866957ac9415799aa3ed8574b",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.Amulet:Amulet",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "dso": "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                "owner": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "amount": {
+                  "initialAmount": "0.0100000000",
+                  "createdAt": {
+                    "number": "111324"
+                  },
+                  "ratePerRound": {
+                    "rate": "0.0001500063"
+                  }
+                }
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-24T12:03:09.534518Z",
+              "packageName": "splice-amulet",
+              "representativePackageId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a",
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 96739,
+              "nodeId": 5,
+              "contractId": "006955edc41e97eedf4db21c6cb77434240bf5d4fd3610907729c3e316c9c09d5fca121220077c4ba4e402111a58263d73172bf23dac26d5cbc27b0f0f51ce4142b2cfa982",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.Amulet:LockedAmulet",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "amulet": {
+                  "dso": "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                  "owner": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "amount": {
+                    "initialAmount": "30.0000000000",
+                    "createdAt": {
+                      "number": "111324"
+                    },
+                    "ratePerRound": {
+                      "rate": "0.0001500063"
+                    }
+                  }
+                },
+                "lock": {
+                  "holders": [],
+                  "expiresAt": "2026-08-24T15:03:08.968Z",
+                  "optContext": "arccade-game-sdk:1:pr-livetest-20260824:fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+                }
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-24T12:03:09.534518Z",
+              "packageName": "splice-amulet",
+              "representativePackageId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a",
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 96739,
+              "nodeId": 6,
+              "contractId": "003a935fc22a0adefca89956755f72d5e0f857d204208d95a9bfc993f552e593e2ca12122091f4ee2553c10465ccc5a1f2e23e0160afb60670586ad2c5614a9ef3bd0fb4a9",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.Amulet:Amulet",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "dso": "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                "owner": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "amount": {
+                  "initialAmount": "1669.9900000000",
+                  "createdAt": {
+                    "number": "111324"
+                  },
+                  "ratePerRound": {
+                    "rate": "0.0001500063"
+                  }
+                }
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-24T12:03:09.534518Z",
+              "packageName": "splice-amulet",
+              "representativePackageId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a",
+              "acsDelta": true
+            }
+          },
+          {
+            "ExercisedEvent": {
+              "offset": 96739,
+              "nodeId": 7,
+              "contractId": "002ffec67ef4c651456505b615a83c12c8a1d4f7596569617310637b73a1a31551ca121220b8c70bc69c2c43d55adef37e61d6d12f6c6ead8d46404cad160e5b8cfd919979",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.AmuletRules:AmuletRules",
+              "interfaceId": "5c1097a9bad0af4bcfe6d3fb0fe55112d3d11f18eae57ddfb14c20836fee226c:Splice.Api.Token.TransferEventsV2:EventLog",
+              "choice": "EventLog_HoldingsChange",
+              "choiceArgument": {
+                "admin": "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                "account": {
+                  "owner": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "provider": null,
+                  "id": ""
+                },
+                "inputHoldingCids": [
+                  "00eca535bb3ccd36d5433a78f0f637bc6b40f8d2105c087c3584b7d1efbaeb1decca12122047733c6e4d834daea5c0a2d1e22741b912bfe201e70896d8ff2a5dc9280a19a1"
+                ],
+                "transferLegSides": [
+                  {
+                    "transferLegId": "leg0",
+                    "side": "SenderSide",
+                    "otherside": {
+                      "owner": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                      "provider": null,
+                      "id": ""
+                    },
+                    "amount": "0.0100000000",
+                    "instrumentId": "Amulet",
+                    "meta": {
+                      "values": {}
+                    }
+                  },
+                  {
+                    "transferLegId": "leg0",
+                    "side": "ReceiverSide",
+                    "otherside": {
+                      "owner": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                      "provider": null,
+                      "id": ""
+                    },
+                    "amount": "0.0100000000",
+                    "instrumentId": "Amulet",
+                    "meta": {
+                      "values": {}
+                    }
+                  },
+                  {
+                    "transferLegId": "leg1",
+                    "side": "SenderSide",
+                    "otherside": {
+                      "owner": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                      "provider": null,
+                      "id": ""
+                    },
+                    "amount": "30.0000000000",
+                    "instrumentId": "Amulet",
+                    "meta": {
+                      "values": {}
+                    }
+                  },
+                  {
+                    "transferLegId": "leg1",
+                    "side": "ReceiverSide",
+                    "otherside": {
+                      "owner": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                      "provider": null,
+                      "id": ""
+                    },
+                    "amount": "30.0000000000",
+                    "instrumentId": "Amulet",
+                    "meta": {
+                      "values": {}
+                    }
+                  }
+                ],
+                "outputHoldingCids": [
+                  "003a935fc22a0adefca89956755f72d5e0f857d204208d95a9bfc993f552e593e2ca12122091f4ee2553c10465ccc5a1f2e23e0160afb60670586ad2c5614a9ef3bd0fb4a9",
+                  "00d8ce5010ee0440f86f3fd0867e6bea29dc186909ad81d7a751633bc9214ab460ca121220a1622e7f6a05c15c1e487e43da04e4b2a1faee9866957ac9415799aa3ed8574b",
+                  "006955edc41e97eedf4db21c6cb77434240bf5d4fd3610907729c3e316c9c09d5fca121220077c4ba4e402111a58263d73172bf23dac26d5cbc27b0f0f51ce4142b2cfa982"
+                ],
+                "observers": [
+                  "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+                ],
+                "extraArgs": {
+                  "context": {
+                    "values": {}
+                  },
+                  "meta": {
+                    "values": {}
+                  }
+                }
+              },
+              "actingParties": [
+                "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337"
+              ],
+              "consuming": false,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 7,
+              "exerciseResult": {},
+              "packageName": "splice-amulet",
+              "implementedInterfaces": [],
+              "acsDelta": false
+            }
+          },
+          {
+            "ExercisedEvent": {
+              "offset": 96739,
+              "nodeId": 8,
+              "contractId": "00c11b0bf1ea86feec03abc966d8fa982d962cfe6c9e7de35a7b52833e239ad8d2ca12122021bfaf16b2e0d134167ac0f7f40a76c93c5e86b554e73d0722aad7d719d69dd4",
+              "templateId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+              "interfaceId": null,
+              "choice": "Entitlement_Commit",
+              "choiceArgument": {
+                "gameCode": "pixel-race-v1",
+                "cycleId": "pr-livetest-20260824",
+                "terms": {
+                  "stakeAmount": "30.0000000000",
+                  "feeAmount": "0.0100000000",
+                  "feeReceiver": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "instrumentId": {
+                    "admin": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                    "id": "Amulet"
+                  },
+                  "custody": "TimeLockedHolding",
+                  "lockHolders": [
+                    "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+                  ],
+                  "lockExpiresAt": "2026-08-24T15:03:08.968Z",
+                  "custodyTag": "arccade-game-sdk:1:pr-livetest-20260824:fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+                },
+                "entryDigest": "fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b",
+                "stakeMeta": {
+                  "values": {}
+                }
+              },
+              "actingParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "consuming": true,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 9,
+              "exerciseResult": "006e2a6b4177eb6c73af812551b8262bae071cf298a801c16bf858a3d08d3153b5ca121220cfa35bf898e64cfae3811c5862b624ff4a98468f60fcd2e8cdff5e2323a32c6d",
+              "packageName": "arccade-game-sdk",
+              "implementedInterfaces": [],
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 96739,
+              "nodeId": 9,
+              "contractId": "006e2a6b4177eb6c73af812551b8262bae071cf298a801c16bf858a3d08d3153b5ca121220cfa35bf898e64cfae3811c5862b624ff4a98468f60fcd2e8cdff5e2323a32c6d",
+              "templateId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a:ArCCade.GameSdk.Cycle:GameStake",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "venue": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "operator": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "venueId": "pixel-race-testnet",
+                "mode": "ModeLive",
+                "player": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "gameCode": "pixel-race-v1",
+                "cycleId": "pr-livetest-20260824",
+                "concurrencyIndex": "0",
+                "tier": "default",
+                "policy": {
+                  "minStakeAmount": "30.0000000000",
+                  "maxStakeAmount": "30.0000000000",
+                  "minPlatformFee": "0.0100000000",
+                  "maxPayoutAmount": "0.0000000000",
+                  "minLockSeconds": "10500",
+                  "maxLockSeconds": "14400",
+                  "minCycleSeconds": "6900",
+                  "maxCycleSeconds": "10500",
+                  "cooldownSeconds": "60",
+                  "abortCooldownSeconds": "300",
+                  "concurrencyLimit": "1",
+                  "requireCustodyProof": true
+                },
+                "custody": "TimeLockedHolding",
+                "terms": {
+                  "stakeAmount": "30.0000000000",
+                  "feeAmount": "0.0100000000",
+                  "feeReceiver": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "instrumentId": {
+                    "admin": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                    "id": "Amulet"
+                  },
+                  "custody": "TimeLockedHolding",
+                  "lockHolders": [
+                    "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+                  ],
+                  "lockExpiresAt": "2026-08-24T15:03:08.968Z",
+                  "custodyTag": "arccade-game-sdk:1:pr-livetest-20260824:fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+                },
+                "committedAt": "2026-08-24T12:03:09.534518Z",
+                "entryDigest": "fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b",
+                "digestAlg": "arccade-sdk-digest-v1/sha256",
+                "policyHash": "5334244280afc58de9890fdbedc8c40c961792529cd27da6fcaa4c58faefa811",
+                "cyclesCompletedBefore": "0",
+                "lifetimeStakedBefore": "0.0000000000",
+                "auditor": null,
+                "meta": {
+                  "values": {}
+                }
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-24T12:03:09.534518Z",
+              "packageName": "arccade-game-sdk",
+              "representativePackageId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a",
+              "acsDelta": true
+            }
+          }
+        ],
+        "offset": 96739,
+        "synchronizerId": "global-domain::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+        "traceContext": {
+          "traceparent": "00-51a5e9634c9dc004d542766769d104fa-2288517f3d34e80d-03",
+          "tracestate": null
+        },
+        "recordTime": "2026-08-24T12:03:09.861120Z",
+        "externalTransactionHash": null,
+        "paidTrafficCost": 9970
+      },
+      "closingTransaction": {
+        "updateId": "122059f002481568a8bdfae7d4f59b9acfc7fe8d81b2313e82ed7e437b27006d028b",
+        "commandId": "game-1787574026700-zwwg19",
+        "workflowId": "",
+        "effectiveAt": "2026-08-24T12:20:26.741193Z",
+        "events": [
+          {
+            "ExercisedEvent": {
+              "offset": 96819,
+              "nodeId": 0,
+              "contractId": "006e2a6b4177eb6c73af812551b8262bae071cf298a801c16bf858a3d08d3153b5ca121220cfa35bf898e64cfae3811c5862b624ff4a98468f60fcd2e8cdff5e2323a32c6d",
+              "templateId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a:ArCCade.GameSdk.Cycle:GameStake",
+              "interfaceId": null,
+              "choice": "GameStake_Abort",
+              "choiceArgument": {
+                "reason": "test kurulumu hatali: oyuncu ile venue ayni parti, kilit tutucusuz olustu"
+              },
+              "actingParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "consuming": true,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 1,
+              "exerciseResult": "008cd478f49d7a2e8508095d253c9f45e591007510719e3c2e4355f0e3eed524d3ca121220741b067659d901fbfc86a5e4886de1303f3d0312b4dbe1edddd9e3b086d6a1c9",
+              "packageName": "arccade-game-sdk",
+              "implementedInterfaces": [],
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 96819,
+              "nodeId": 1,
+              "contractId": "008cd478f49d7a2e8508095d253c9f45e591007510719e3c2e4355f0e3eed524d3ca121220741b067659d901fbfc86a5e4886de1303f3d0312b4dbe1edddd9e3b086d6a1c9",
+              "templateId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "venue": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "operator": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "venueId": "pixel-race-testnet",
+                "mode": "ModeLive",
+                "player": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "concurrencyIndex": "0",
+                "tier": "default",
+                "policy": {
+                  "minStakeAmount": "30.0000000000",
+                  "maxStakeAmount": "30.0000000000",
+                  "minPlatformFee": "0.0100000000",
+                  "maxPayoutAmount": "0.0000000000",
+                  "minLockSeconds": "10500",
+                  "maxLockSeconds": "14400",
+                  "minCycleSeconds": "6900",
+                  "maxCycleSeconds": "10500",
+                  "cooldownSeconds": "60",
+                  "abortCooldownSeconds": "300",
+                  "concurrencyLimit": "1",
+                  "requireCustodyProof": true
+                },
+                "custody": "TimeLockedHolding",
+                "instrumentId": {
+                  "admin": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "id": "Amulet"
+                },
+                "nextEligibleAt": "2026-08-24T12:25:26.741193Z",
+                "cyclesCompleted": "0",
+                "lifetimeStaked": "0.0000000000",
+                "auditor": null,
+                "meta": {
+                  "values": {}
+                }
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-24T12:20:26.741193Z",
+              "packageName": "arccade-game-sdk",
+              "representativePackageId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a",
+              "acsDelta": true
+            }
+          },
+          {
+            "ExercisedEvent": {
+              "offset": 96819,
+              "nodeId": 2,
+              "contractId": "006955edc41e97eedf4db21c6cb77434240bf5d4fd3610907729c3e316c9c09d5fca121220077c4ba4e402111a58263d73172bf23dac26d5cbc27b0f0f51ce4142b2cfa982",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.Amulet:LockedAmulet",
+              "interfaceId": null,
+              "choice": "LockedAmulet_UnlockV2",
+              "choiceArgument": {},
+              "actingParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "consuming": true,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 6,
+              "exerciseResult": {
+                "amuletCid": "002e08da67ed5ca0aeb7c29571948b8b9270827b109c1aec872625860287208971ca12122026d367bb3f3435687673baf7177bdbb22e023e4765273d58864a346a4ac72a1d",
+                "meta": {
+                  "values": {
+                    "splice.lfdecentralizedtrust.org/reason": "holders released lock",
+                    "splice.lfdecentralizedtrust.org/tx-kind": "unlock"
+                  }
+                }
+              },
+              "packageName": "splice-amulet",
+              "implementedInterfaces": [],
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 96819,
+              "nodeId": 3,
+              "contractId": "002e08da67ed5ca0aeb7c29571948b8b9270827b109c1aec872625860287208971ca12122026d367bb3f3435687673baf7177bdbb22e023e4765273d58864a346a4ac72a1d",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.Amulet:Amulet",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "dso": "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                "owner": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "amount": {
+                  "initialAmount": "30.0000000000",
+                  "createdAt": {
+                    "number": "111324"
+                  },
+                  "ratePerRound": {
+                    "rate": "0.0001500063"
+                  }
+                }
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-24T12:20:26.741193Z",
+              "packageName": "splice-amulet",
+              "representativePackageId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a",
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 96819,
+              "nodeId": 4,
+              "contractId": "0052456471972c2af5e8a7487822c117ccbff614796daebfaee2798e1e7f39e302ca121220bbfa5516ae85f8968cb15b631bea10220ffe20bbb33c6ab99ad295bb89ca1ea2",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.AmuletEventLog:AmuletEventLog",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "dso": "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337"
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-24T12:20:26.741193Z",
+              "packageName": "splice-amulet",
+              "representativePackageId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a",
+              "acsDelta": false
+            }
+          },
+          {
+            "ExercisedEvent": {
+              "offset": 96819,
+              "nodeId": 5,
+              "contractId": "0052456471972c2af5e8a7487822c117ccbff614796daebfaee2798e1e7f39e302ca121220bbfa5516ae85f8968cb15b631bea10220ffe20bbb33c6ab99ad295bb89ca1ea2",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.AmuletEventLog:AmuletEventLog",
+              "interfaceId": "5c1097a9bad0af4bcfe6d3fb0fe55112d3d11f18eae57ddfb14c20836fee226c:Splice.Api.Token.TransferEventsV2:EventLog",
+              "choice": "EventLog_HoldingsChange",
+              "choiceArgument": {
+                "admin": "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+                "account": {
+                  "owner": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "provider": null,
+                  "id": ""
+                },
+                "inputHoldingCids": [
+                  "006955edc41e97eedf4db21c6cb77434240bf5d4fd3610907729c3e316c9c09d5fca121220077c4ba4e402111a58263d73172bf23dac26d5cbc27b0f0f51ce4142b2cfa982"
+                ],
+                "transferLegSides": [],
+                "outputHoldingCids": [
+                  "002e08da67ed5ca0aeb7c29571948b8b9270827b109c1aec872625860287208971ca12122026d367bb3f3435687673baf7177bdbb22e023e4765273d58864a346a4ac72a1d"
+                ],
+                "observers": [
+                  "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+                ],
+                "extraArgs": {
+                  "context": {
+                    "values": {}
+                  },
+                  "meta": {
+                    "values": {
+                      "splice.lfdecentralizedtrust.org/reason": "holders released lock"
+                    }
+                  }
+                }
+              },
+              "actingParties": [
+                "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337"
+              ],
+              "consuming": false,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 5,
+              "exerciseResult": {},
+              "packageName": "splice-amulet",
+              "implementedInterfaces": [],
+              "acsDelta": false
+            }
+          },
+          {
+            "ExercisedEvent": {
+              "offset": 96819,
+              "nodeId": 6,
+              "contractId": "0052456471972c2af5e8a7487822c117ccbff614796daebfaee2798e1e7f39e302ca121220bbfa5516ae85f8968cb15b631bea10220ffe20bbb33c6ab99ad295bb89ca1ea2",
+              "templateId": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a:Splice.AmuletEventLog:AmuletEventLog",
+              "interfaceId": null,
+              "choice": "Archive",
+              "choiceArgument": {},
+              "actingParties": [
+                "DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337"
+              ],
+              "consuming": true,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 6,
+              "exerciseResult": {},
+              "packageName": "splice-amulet",
+              "implementedInterfaces": [],
+              "acsDelta": false
+            }
+          }
+        ],
+        "offset": 96819,
+        "synchronizerId": "global-domain::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+        "traceContext": {
+          "traceparent": "00-a7607e492f1856463d75f3c54763af47-81612308221ddff3-03",
+          "tracestate": null
+        },
+        "recordTime": "2026-08-24T12:20:27.121329Z",
+        "externalTransactionHash": null,
+        "paidTrafficCost": 8821
+      }
+    },
+    {
+      "closingChoice": "GameStake_ExpireUnsettled",
+      "stakeContractId": "00eeba381c0ba9051a8aebb2fc9a26b63875b758d4512722beca6d2e181e5670a7ca1212205df9adb4b6e66c08453cb6d06e630c48f27ea8b2e642796e5c550e268fee331c",
+      "commitTransaction": {
+        "updateId": "1220e805a47b5b42c44ee10c256ec5b46bc034f7e25b6b0d3f72916fb62d38d75765",
+        "commandId": "game-1787573961139-5mnle1",
+        "workflowId": "",
+        "effectiveAt": "2026-08-24T12:19:21.158600Z",
+        "events": [
+          {
+            "ExercisedEvent": {
+              "offset": 96810,
+              "nodeId": 0,
+              "contractId": "006111292987e2ccddd31f320dc63346ef8f6c20d36a8e61c5d8ac81e25f5edfdbca121220d215c8612fb8d37e333a529e408ab92f44781c4d394d4195244037332aab6be1",
+              "templateId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+              "interfaceId": null,
+              "choice": "Entitlement_Commit",
+              "choiceArgument": {
+                "gameCode": "pixel-race-v1",
+                "cycleId": "pr-guard-test",
+                "terms": {
+                  "stakeAmount": "30.0000000000",
+                  "feeAmount": "0.0100000000",
+                  "feeReceiver": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "instrumentId": {
+                    "admin": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                    "id": "Amulet"
+                  },
+                  "custody": "TimeLockedHolding",
+                  "lockHolders": [
+                    "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+                  ],
+                  "lockExpiresAt": "2026-08-24T15:19:21.139Z",
+                  "custodyTag": "arccade-game-sdk:1:pr-guard-test:fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+                },
+                "entryDigest": "fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b",
+                "stakeMeta": {
+                  "values": {}
+                }
+              },
+              "actingParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "consuming": true,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 1,
+              "exerciseResult": "00eeba381c0ba9051a8aebb2fc9a26b63875b758d4512722beca6d2e181e5670a7ca1212205df9adb4b6e66c08453cb6d06e630c48f27ea8b2e642796e5c550e268fee331c",
+              "packageName": "arccade-game-sdk",
+              "implementedInterfaces": [],
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 96810,
+              "nodeId": 1,
+              "contractId": "00eeba381c0ba9051a8aebb2fc9a26b63875b758d4512722beca6d2e181e5670a7ca1212205df9adb4b6e66c08453cb6d06e630c48f27ea8b2e642796e5c550e268fee331c",
+              "templateId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a:ArCCade.GameSdk.Cycle:GameStake",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "venue": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "operator": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "venueId": "arccade-games-dryrun-1",
+                "mode": "ModeDryRun",
+                "player": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "gameCode": "pixel-race-v1",
+                "cycleId": "pr-guard-test",
+                "concurrencyIndex": "0",
+                "tier": "silver",
+                "policy": {
+                  "minStakeAmount": "10.0000000000",
+                  "maxStakeAmount": "1000.0000000000",
+                  "minPlatformFee": "0.0100000000",
+                  "maxPayoutAmount": "500.0000000000",
+                  "minLockSeconds": "60",
+                  "maxLockSeconds": "172800",
+                  "minCycleSeconds": "10",
+                  "maxCycleSeconds": "7200",
+                  "cooldownSeconds": "30",
+                  "abortCooldownSeconds": "300",
+                  "concurrencyLimit": "1",
+                  "requireCustodyProof": false
+                },
+                "custody": "TimeLockedHolding",
+                "terms": {
+                  "stakeAmount": "30.0000000000",
+                  "feeAmount": "0.0100000000",
+                  "feeReceiver": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "instrumentId": {
+                    "admin": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                    "id": "Amulet"
+                  },
+                  "custody": "TimeLockedHolding",
+                  "lockHolders": [
+                    "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+                  ],
+                  "lockExpiresAt": "2026-08-24T15:19:21.139Z",
+                  "custodyTag": "arccade-game-sdk:1:pr-guard-test:fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+                },
+                "committedAt": "2026-08-24T12:19:21.1586Z",
+                "entryDigest": "fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b",
+                "digestAlg": "arccade-sdk-digest-v1/sha256",
+                "policyHash": "ba3d47bd69ad6fcb3826a96975e48e645df4f3f6fb334a52edb64d4cce1d0d43",
+                "cyclesCompletedBefore": "1",
+                "lifetimeStakedBefore": "100.0000000000",
+                "auditor": null,
+                "meta": {
+                  "values": {}
+                }
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-24T12:19:21.158600Z",
+              "packageName": "arccade-game-sdk",
+              "representativePackageId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a",
+              "acsDelta": true
+            }
+          }
+        ],
+        "offset": 96810,
+        "synchronizerId": "global-domain::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+        "traceContext": {
+          "traceparent": "00-902e0abebb2c1dead95ed77d816a5ea3-ec8ed0e458ce062c-03",
+          "tracestate": null
+        },
+        "recordTime": "2026-08-24T12:19:21.319622Z",
+        "externalTransactionHash": null,
+        "paidTrafficCost": 3296
+      },
+      "closingTransaction": {
+        "updateId": "1220e9b7633c13553b2871d49d81356ac7e504925bfb728c0bd08c7482d0c50d6e0b",
+        "commandId": "guard-4bd39b8367b7",
+        "workflowId": "",
+        "effectiveAt": "2026-08-27T17:27:00.111993Z",
+        "events": [
+          {
+            "ExercisedEvent": {
+              "offset": 116078,
+              "nodeId": 0,
+              "contractId": "00eeba381c0ba9051a8aebb2fc9a26b63875b758d4512722beca6d2e181e5670a7ca1212205df9adb4b6e66c08453cb6d06e630c48f27ea8b2e642796e5c550e268fee331c",
+              "templateId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a:ArCCade.GameSdk.Cycle:GameStake",
+              "interfaceId": null,
+              "choice": "GameStake_ExpireUnsettled",
+              "choiceArgument": {},
+              "actingParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "consuming": true,
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "lastDescendantNodeId": 1,
+              "exerciseResult": "001f4f91993330eacbda7157e7367183b1c39312c1378eb6c7c6ca2ab928252034ca1212201fb3894842d3e9219b7077061b26d6c3114a625cf52231d33cc3ac168191e148",
+              "packageName": "arccade-game-sdk",
+              "implementedInterfaces": [],
+              "acsDelta": true
+            }
+          },
+          {
+            "CreatedEvent": {
+              "offset": 116078,
+              "nodeId": 1,
+              "contractId": "001f4f91993330eacbda7157e7367183b1c39312c1378eb6c7c6ca2ab928252034ca1212201fb3894842d3e9219b7077061b26d6c3114a625cf52231d33cc3ac168191e148",
+              "templateId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+              "contractKey": null,
+              "contractKeyHash": "",
+              "createArgument": {
+                "venue": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "operator": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "venueId": "arccade-games-dryrun-1",
+                "mode": "ModeDryRun",
+                "player": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                "concurrencyIndex": "0",
+                "tier": "silver",
+                "policy": {
+                  "minStakeAmount": "10.0000000000",
+                  "maxStakeAmount": "1000.0000000000",
+                  "minPlatformFee": "0.0100000000",
+                  "maxPayoutAmount": "500.0000000000",
+                  "minLockSeconds": "60",
+                  "maxLockSeconds": "172800",
+                  "minCycleSeconds": "10",
+                  "maxCycleSeconds": "7200",
+                  "cooldownSeconds": "30",
+                  "abortCooldownSeconds": "300",
+                  "concurrencyLimit": "1",
+                  "requireCustodyProof": false
+                },
+                "custody": "TimeLockedHolding",
+                "instrumentId": {
+                  "admin": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+                  "id": "Amulet"
+                },
+                "nextEligibleAt": "2026-08-27T17:27:00.111993Z",
+                "cyclesCompleted": "1",
+                "lifetimeStaked": "100.0000000000",
+                "auditor": null,
+                "meta": {
+                  "values": {}
+                }
+              },
+              "createdEventBlob": "",
+              "interfaceViews": [],
+              "witnessParties": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "signatories": [
+                "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+              ],
+              "observers": [],
+              "createdAt": "2026-08-27T17:27:00.111993Z",
+              "packageName": "arccade-game-sdk",
+              "representativePackageId": "bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a",
+              "acsDelta": true
+            }
+          }
+        ],
+        "offset": 116078,
+        "synchronizerId": "global-domain::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+        "traceContext": {
+          "traceparent": "00-889b3cd587fe0df2c3b36c6ba34fad0c-14dc855948890543-03",
+          "tracestate": null
+        },
+        "recordTime": "2026-08-27T17:27:00.448706Z",
+        "externalTransactionHash": null,
+        "paidTrafficCost": 3230
+      }
+    }
+  ]
+}

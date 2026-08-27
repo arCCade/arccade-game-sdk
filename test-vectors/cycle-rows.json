@@ -1,0 +1,63 @@
+{
+  "note": "Expected output of reconstructing test-vectors/cycle-trees.json. Every implementation — JavaScript, Python, Java, or one written later — must reproduce these rows, these leaves and this root from that fixture. Amounts are integer 1e-10 units as decimal strings because JSON has no integer type wide enough to be trusted here.",
+  "reportOrder": "committedAtMicros, then cycleId",
+  "rows": [
+    {
+      "cycleId": "tw-testnet-1787437747",
+      "player": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+      "gameCode": "trade-wars-v4",
+      "concurrencyIndex": "0",
+      "entryDigest": "5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852",
+      "outcomeDigest": "124de70ecc959cfe2d9f01362a414e9a493df2e10b521551ffd262c1f29d2f0a",
+      "committedUnits": "1000000000000",
+      "feeUnits": "5000000000",
+      "returnedUnits": "1000000000000",
+      "forfeitedUnits": "0",
+      "payoutUnits": "0",
+      "disposition": "returned-in-full",
+      "committedAtMicros": "1787437747372202",
+      "settledAtMicros": "1787437775189712",
+      "custodyTag": "arccade-game-sdk:1:tw-testnet-1787437747:5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
+    },
+    {
+      "cycleId": "pr-livetest-20260824",
+      "player": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+      "gameCode": "pixel-race-v1",
+      "concurrencyIndex": "0",
+      "entryDigest": "fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b",
+      "outcomeDigest": "",
+      "committedUnits": "300000000000",
+      "feeUnits": "100000000",
+      "returnedUnits": "300000000000",
+      "forfeitedUnits": "0",
+      "payoutUnits": "0",
+      "disposition": "aborted",
+      "committedAtMicros": "1787572989534518",
+      "settledAtMicros": "1787574026741193",
+      "custodyTag": "arccade-game-sdk:1:pr-livetest-20260824:fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+    },
+    {
+      "cycleId": "pr-guard-test",
+      "player": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+      "gameCode": "pixel-race-v1",
+      "concurrencyIndex": "0",
+      "entryDigest": "fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b",
+      "outcomeDigest": "",
+      "committedUnits": "300000000000",
+      "feeUnits": "100000000",
+      "returnedUnits": "300000000000",
+      "forfeitedUnits": "0",
+      "payoutUnits": "0",
+      "disposition": "expired-unsettled",
+      "committedAtMicros": "1787573961158600",
+      "settledAtMicros": "1787851620111993",
+      "custodyTag": "arccade-game-sdk:1:pr-guard-test:fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+    }
+  ],
+  "leaves": [
+    "f2fe5dfcde1f7bf1f7e9cb647c5dedbcee89b0882ed90e0efc40da10335536d7",
+    "5f472fe97e31a547c0bf5efe24a254b7395cee8f85921e9e210bc5004da0a6db",
+    "6dc362be3d40c1217647cb3eba839b0bb661ed9383fa7dd8f00cf029d9a2b364"
+  ],
+  "merkleRoot": "910a515e5aba2c177291fd253d1cb4dbba7a04878e65b0f8e6d0a2bb54705128"
+}

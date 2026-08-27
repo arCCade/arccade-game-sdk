@@ -19,6 +19,77 @@
 | Backend entegrasyonu (commitment/settlement yolu, Pixel Race stake-at-start) | **YAZILMADI** |
 | Canli custody (gercek `LockedAmulet`) | **KOSULMADI** — TestNet cuzdaninda 0 CC var; mekanik MainNet'te zaten calisiyor |
 
+## RAPOR SATIRLARINI AGACTAN KURMAK — NORMATIF (27 Agu 2026)
+
+Capa, satirlari oyun veritabanindan gelirse arCCade'in kendi kaydina attigi
+imzadir. Kanit olmasi, satirlarin DENETCININ DE OKUDUGU akistan turemesine
+baglidir — ve o turetmenin, herkesin elindeki dille kosabildigi bir sey
+olmasina. Bu yuzden kurallar tek bir implementasyonda degil, FIXTURE'da yasar:
+
+    test-vectors/cycle-trees.json   TestNet'ten alinmis GERCEK islemler
+                                    (TRANSACTION_SHAPE_LEDGER_EFFECTS)
+    test-vectors/cycle-rows.json    ondan cikmasi gereken satirlar,
+                                    yapraklar ve kok
+
+Her implementasyon bu ciftin ikisine birden baglanir. Bugun JavaScript
+(`js/src/cycleAudit.js`) ve Python (`tools/cycle_audit_reference.py`); yarin
+Java ya da baska bir dil ayni dosyaya karsi kendini kanitlar.
+
+FIXTURE UC KAPANIS YOLUNU DA ICERIR (settle / abort / expire). Biri eksik
+kalirsa, o yolu yanlis kuran bir implementasyon testten gecer.
+
+### Bir dongu agacta neye benziyor
+
+Iki islem. Commit, giris yarisinin TAMAMINI `GameStake` create argumaninda
+tasir; kapanis, cikis yarisini choice argumaninda tasir. Commit isleminde
+ayrica `Amulet -> LockedAmulet -> Amulet` create'leri gorunur: iki komutun tek
+islemde atomik gittigi iddiasi burada, ledger verisinde dogrulanabilir.
+
+BIRLESTIRME ANAHTARI `cycleId` DEGIL, STAKE KONTRAT KIMLIGIDIR. Kapanis
+choice'lari `cycleId`'yi TEKRAR ETMEZ — o, exercise edilen kontratin
+icindedir. Commit'in `exerciseResult`'i o kontrat kimligidir ve akista iki
+yariyi birbirine baglayan tek sey odur. (Spesifikasyonun onceki hali "keyed on
+cycleId" diyordu; agac aksini soyluyor.)
+
+### Hangi alan OKUNUR, hangisi TURETILIR
+
+`GameStake_Settle` tutarlari ve `outcomeDigest`'i beyan eder. `_Abort`
+yalnizca `reason` tasir; `_ExpireUnsettled` HICBIR SEY tasimaz. O iki yolda
+tutarlar okunmaz, MEKANIKTEN TURETILIR: `LockedAmulet_UnlockV2` her zaman
+sahibine tam oder ve bu mekanikte forfeit imkansizdir, dolayisiyla iptal
+edilmis ya da suresi dolmus bir dongu stake'i geri verir, baska bir sey
+kimildamaz. `outcomeDigest` bos kalir — bulamadigimiz icin degil, hic var
+olmadigi icin.
+
+DISPOSITION, ABORT VE EXPIRE'DA CHOICE ADINDAN gelir; yalnizca settle bir
+disposition beyan eder.
+
+### Serbest bir capraz kontrol
+
+Unlock BAZEN ayni islemdedir, bazen degil: `custodyRef` verilmemis bir
+settlement'ta ve her expire'da unlock ayri bir isleme dusler. Ayni islemde
+oldugunda yaratilan `Amulet`, geri donen tutarin BAGIMSIZ ikinci okumasidir.
+Implementasyon o zaman beyani dogrulamali ve uyusmazligi RAPORLAMALIDIR —
+gecmemelidir.
+
+### Siralama ve eksikler
+
+Rapor sirasi `committedAtMicros`, esitlikte `cycleId`. Belirsiz birakilsa iki
+durust implementasyon ayni kume uzerinde FARKLI kok hesaplardi.
+
+Eslesmemis yarilar sessizce atilmaz: kapanisi pencere disinda kalan bir commit
+ayrica raporlanir. Onu sessizce dusurmek, capanin kanitlamak icin var oldugu
+eksiltmenin ta kendisidir.
+
+### Tasima — JSON API bu is icin YETMEZ
+
+Olculdu: `http-list-max-elements-limit` 200'dur ve `limit` query parametresi
+onu ASMAZ; 40.000 offset'lik tek sorgu 413 doner. Fixture 300 offset'lik
+pencerelerle taranarak cikarildi. Gunluk bir rapor bu siniri kolayca asar.
+OpenAPI'nin kendi metni daha buyuk kumeler icin websocket onerir; gercek
+tuketici gRPC akisi ya da asyncapi olmalidir. Pencereli JSON, gelistirme ve
+dogrulama icin yeterlidir, uretim raporlamasi icin degildir.
+
 ## DONEM CAPASI — TESTNET'TE OLCULEN SINIRLAR (27 Agu 2026)
 
 `GameVenue_AnchorPeriod` uzerinde `rows` bir choice argumanidir: ACS'ye
