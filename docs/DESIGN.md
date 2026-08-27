@@ -14,7 +14,8 @@
 | Python referans implementasyonu + altin vektor | UYGULANDI, `daml test` ile zorlaniyor |
 | `Audit` modulu, `CycleAuditRow`, `VenuePeriodAnchor`, Merkle yardimcilari | v1.5.0'da UYGULANDI, 27 Agu 2026'da TestNet'te vetted — Daml/JS/Python paritesi altin vektorle kilitli |
 | `GameVenue_AnchorPeriod` | v1.5.0'da UYGULANDI, mutasyonla dogrulandi |
-| Java digest portu | **YAZILMADI** |
+| Java digest portu | UYGULANDI (`arccade-wallet-backend`, `com.arccade.wallet.gamesdk`) — `ArccadeDigest` + iki adaptor, altin vektorler 10/10; DURUM TABLOSU BU MADDEDE ESKIMISTI |
+| Java Merkle + denetim satiri | v1.5.0 ile eklendi: `ArccadeMerkle`, `PeriodAuditDocuments`, dort dil paritesi 9/9, mutasyonla dogrulandi |
 | Backend entegrasyonu (commitment/settlement yolu, Pixel Race stake-at-start) | **YAZILMADI** |
 | Canli custody (gercek `LockedAmulet`) | **KOSULMADI** — TestNet cuzdaninda 0 CC var; mekanik MainNet'te zaten calisiyor |
 
