@@ -26,7 +26,7 @@
 -- okumak zorundadir. Bu, bu participant uzerinde dogrulanmistir.
 module ArCCade.GameSdk.Cycle where
 
-import DA.Optional (optionalToList)
+import DA.Optional (isNone, optionalToList)
 import DA.Text qualified as T
 
 import Splice.Api.Token.HoldingV1 qualified as Holding
@@ -50,6 +50,80 @@ assertDigestMatches label expected (Some preimage) =
     (label <> " belgesi saklanan digest ile uyusmuyor")
     (textDigest preimage == expected)
 
+-- | Slot dagitiminin ZINCIR USTU defteri — bir shard'i.
+--
+-- NEDEN VAR. Eszamanlilik siniri, oyuncuya TAM OLARAK @concurrencyLimit@
+-- adet entitlement verilmesine dayanir: commit birini tuketir, settlement
+-- geri yaratir, dolayisiyla ayni anda acik dongu sayisi dolasimA GIREN
+-- jeton sayisini asamaz. 1.3.0'a kadar bu cumlenin "tam olarak" kismini
+-- hicbir sey zorlamiyordu — @GameVenue_IssueEntitlements@ yalnizca indeks
+-- ARALIGINI denetliyordu, adedi ve benzersizligi degil. Tasarimin dayandigi
+-- degismez bir ledger kurali degil, operator gelenegiydi. Bu template onu
+-- kurala cevirir.
+--
+-- NEDEN LISTE VENUE'DA DEGIL. LF 2.1'de contract key yoktur, dolayisiyla
+-- "bu oyuncuya daha once verilmedi" ancak bir defter TUTULARAK kanitlanir.
+-- O defteri venue'nun icine koymak calisirdi ama Daml yukseltme kurallari
+-- alan KALDIRMAYA izin vermez: buyuyen liste semada kalici olur ve
+-- shard'lamaya gecmek canli venue uzerinde veri gocu gerektirirdi. Venue
+-- bu yuzden yalnizca bir ISARETCI tutar; buyume bastan bolunebilir olan bu
+-- kontratin icindedir.
+--
+-- ZINCIR KANDIRILAMAZ. Venue basi gosterir, her shard sonrakini; choice
+-- isaretcileri kendisi takip eder. Cagiran bir shard'i atlayarak "yok" diye
+-- gosteremez — yokluk, key olmadan, YAPI GEREGI kanitlanir.
+--
+-- MALIYET SICAK YOLDA DEGIL. Basim oyuncu basina BIR KEZdir; commit ve
+-- settlement roster'a hic bakmaz. Zinciri yurumek O(shard) fetch'tir ve
+-- venue tuketilmedigi icin basim venue uzerinde cekisme yaratmaz.
+template PlayerRoster
+  with
+    operator : Party
+    venue : Party
+    venueId : Text
+    shardIndex : Int
+    capacity : Int
+    players : [Party]
+    next : Optional (ContractId PlayerRoster)
+  where
+    signatory operator
+    observer venue
+
+    ensure
+      capacity > 0
+        && shardIndex >= 0
+        && length players <= capacity
+
+    -- Zincirin BU noktasindan sonrasinda oyuncu var mi. Kuyruga kadar iner;
+    -- kisa devre yoktur, cunku bir shard'i atlamak tam da onlemek istedigimiz sey.
+    nonconsuming choice Roster_Contains : Bool
+      with
+        who : Party
+      controller operator
+      do
+        if who `elem` players
+          then pure True
+          else case next of
+            None -> pure False
+            Some nxt -> exercise nxt Roster_Contains with who
+
+    -- Oyuncuyu BU shard'a ekler. Yalnizca BAS shard uzerinde cagrilir.
+    --
+    -- Zincirin ortasindaki bir shard'a dokunmak, ebeveyninin isaretcisini
+    -- arsivlenmis bir kontrata cevirirdi — degismez kontratlarla bagli liste
+    -- tutmanin klasik tuzagi, ve derlenen ama ikinci shard'da patlayan
+    -- cinsten. Buyume bu yuzden BASTAN yapilir: dolu bir bas, tuketilmez;
+    -- onun yerine onu gosteren yeni bir bas yaratilir, boylece eski basin
+    -- kontrat id'si gecerli kalir.
+    choice Roster_AddPlayer : ContractId PlayerRoster
+      with
+        who : Party
+      controller operator
+      do
+        assertMsg "shard dolu — cagiran yeni bas yaratmaliydi"
+          (length players < capacity)
+        create this with players = who :: players
+
 -- | Venue: oyun mekaniginin ledger uzerinde okunabilir beyani.
 --
 -- @gameCodes@ alani S5'in zincir ustu ifadesidir: ayni custody ve settlement
@@ -71,6 +145,16 @@ template GameVenue
     instrumentId : Holding.InstrumentId
     auditor : Optional Party
     meta : Metadata.Metadata
+    roster : Optional (ContractId PlayerRoster)
+      -- ^ Slot defterinin BASI. Bir isaretcidir, liste degil: roster'in ici
+      --   nasil bolunurse bolunsun venue semasi degismek zorunda kalmaz —
+      --   ve Daml alan kaldirmaya izin vermedigi icin, buraya konan seyin
+      --   sonsuza kadar dogru kalmasi gerekir.
+      --
+      --   1.3.0'dan yukseltilen venue'lar bunu @None@ olarak tasir ve slot
+      --   dagitamaz; once @GameVenue_InitRoster@ cagrilmalidir. Fail-closed
+      --   bilerek secildi: roster'i istege bagli yapmak, zorlamayi da istege
+      --   bagli yapardi.
   where
     signatory operator
     observer venue :: optionalToList auditor
@@ -95,27 +179,50 @@ template GameVenue
                     && policy.minPlatformFee == 0.0
                     && policy.maxPayoutAmount == 0.0))
 
+    -- Slot defterini kurar. Bir kez: ikinci cagri mevcut zinciri bir kenara
+    -- birakir ve daha once verilmis slotlari GORUNMEZ kilardi, o yuzden
+    -- reddedilir.
+    choice GameVenue_InitRoster : ContractId GameVenue
+      with
+        shardCapacity : Int
+      controller operator
+      do
+        assertMsg "roster zaten kurulu" (isNone roster)
+        assertMsg "shard kapasitesi pozitif olmali" (shardCapacity > 0)
+        head_ <- create PlayerRoster with
+          operator; venue; venueId
+          capacity = shardCapacity
+          shardIndex = 0
+          players = []
+          next = None
+        create this with roster = Some head_
+
     -- Oyunculara slot dagitir. Toplu: N oyuncuyu ise almak tek islem.
     -- Dongu disi ve amortismana tabi; nitelikli ucret tabaninin disinda.
-    nonconsuming choice GameVenue_IssueEntitlements : [ContractId PlayerEntitlement]
+    --
+    -- ADET VE BENZERSIZLIK ARTIK YAPI GEREGIDIR, denetlenen bir sey degil.
+    -- Oyuncu basina TAM OLARAK @concurrencyLimit@ slot, indeksler 0..limit-1
+    -- olarak uretilir; ayni oyuncuya ikinci kez dagitim roster tarafindan
+    -- reddedilir. 1.3.0'da burada yalnizca indeks ARALIGI denetleniyordu,
+    -- yani venue sinirsiz slot basabiliyor ve politikanin es zamanlilik
+    -- sinirini kendi kendine anlamsiz kilabiliyordu.
+    --
+    -- @EntitlementGrant.concurrencyIndex@ ARTIK OKUNMUYOR: hangi indekslerin
+    -- uretilecegine politika karar verir. Alan, yukseltme uyumlulugu alan
+    -- kaldirmaya izin vermedigi icin duruyor; sifir disi bir deger vermek,
+    -- cagiranin hala eski modeli varsaydigini gosterdigi icin reddedilir.
+    choice GameVenue_IssueEntitlements : [ContractId PlayerEntitlement]
       with
         grants : [EntitlementGrant]
       controller operator
       do
         now <- getTime
-        forA grants $ \g -> do
-          assertMsg "concurrencyIndex politika sinirinin disinda"
-            (g.concurrencyIndex >= 0 && g.concurrencyIndex < policy.concurrencyLimit)
-          create PlayerEntitlement with
-            venue; operator; venueId; mode
-            player = g.player
-            concurrencyIndex = g.concurrencyIndex
-            tier = g.tier
-            policy; custody; instrumentId; auditor
-            nextEligibleAt = now
-            cyclesCompleted = 0
-            lifetimeStaked = 0.0
-            meta = Metadata.emptyMetadata
+        rosterCid <- case roster of
+          Some r -> pure r
+          None -> abort "venue'nun slot defteri yok — once GameVenue_InitRoster"
+        (finalHead, issued) <- issueSlots this now rosterCid grants
+        _ <- create this with roster = Some finalHead
+        pure issued
 
     -- Politika degisikligi ACIK DONGULERE ULASMAZ: her GameStake kendi
     -- politika anlik goruntusunu ve policyHash'ini tasir. Bu bir performans
@@ -384,3 +491,62 @@ recycleEntitlement s counted nextAt =
       if counted then s.lifetimeStakedBefore + s.terms.stakeAmount else s.lifetimeStakedBefore
     auditor = s.auditor
     meta = Metadata.emptyMetadata
+
+-- | Slot dagitiminin dongusu: her grant icin defteri kontrol et, oyuncuyu
+-- ekle, tam olarak @concurrencyLimit@ slot uret.
+--
+-- Choice govdesinden ayri duruyor cunku basin her adimda ILERLEMESI gerekiyor
+-- ve Daml'de monadik katlama yok: ozyineleme, tekrar eden bir katlama
+-- taklidinden hem daha okunur hem de basin nereden nereye gectigi acik.
+issueSlots
+  : GameVenue
+  -> Time
+  -> ContractId PlayerRoster
+  -> [EntitlementGrant]
+  -> Update (ContractId PlayerRoster, [ContractId PlayerEntitlement])
+issueSlots _ _ headCid [] = pure (headCid, [])
+issueSlots venueRec now headCid (g :: rest) = do
+  assertMsg
+    "concurrencyIndex artik dagitimda kullanilmiyor; 0 gecin"
+    (g.concurrencyIndex == 0)
+  already <- exercise headCid Roster_Contains with who = g.player
+  assertMsg "oyuncuya bu venue'da zaten slot verilmis" (not already)
+
+  headShard <- fetch headCid
+  newHead <-
+    if length headShard.players < headShard.capacity
+      then exercise headCid Roster_AddPlayer with who = g.player
+      else
+        -- Bas dolu: onu TUKETMEDEN yeni bir bas yaratiriz, boylece eski basin
+        -- kontrat id'si (ve ona bakan her sey) gecerli kalir. Zincirin
+        -- ortasindaki bir shard'a dokunmak ebeveynin isaretcisini olu bir
+        -- kontrata cevirirdi.
+        create PlayerRoster with
+          operator = venueRec.operator
+          venue = venueRec.venue
+          venueId = venueRec.venueId
+          capacity = headShard.capacity
+          shardIndex = headShard.shardIndex + 1
+          players = [g.player]
+          next = Some headCid
+
+  slots <- forA [0 .. venueRec.policy.concurrencyLimit - 1] $ \ix ->
+    create PlayerEntitlement with
+      venue = venueRec.venue
+      operator = venueRec.operator
+      venueId = venueRec.venueId
+      mode = venueRec.mode
+      player = g.player
+      concurrencyIndex = ix
+      tier = g.tier
+      policy = venueRec.policy
+      custody = venueRec.custody
+      instrumentId = venueRec.instrumentId
+      auditor = venueRec.auditor
+      nextEligibleAt = now
+      cyclesCompleted = 0
+      lifetimeStaked = 0.0
+      meta = Metadata.emptyMetadata
+
+  (lastHead, more) <- issueSlots venueRec now newHead rest
+  pure (lastHead, slots <> more)

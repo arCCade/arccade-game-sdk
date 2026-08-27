@@ -39,6 +39,7 @@ liveVenueCannotWaiveCustodyProof = script do
       instrumentId = testInstrument p.registry
       auditor = None
       meta = Metadata.emptyMetadata
+      roster = None
 
 -- | Kuru kosum venue'su onek TASIMAK ZORUNDA.
 dryRunVenueNeedsPrefix : Script ()
@@ -56,6 +57,7 @@ dryRunVenueNeedsPrefix = script do
       instrumentId = testInstrument p.registry
       auditor = None
       meta = Metadata.emptyMetadata
+      roster = None
 
 -- | Kuru kosum venue'su UCRET ALAMAZ — niteliksiz faaliyet gelir uretmemeli.
 dryRunVenueCannotCharge : Script ()
@@ -74,6 +76,7 @@ dryRunVenueCannotCharge = script do
       instrumentId = testInstrument p.registry
       auditor = None
       meta = Metadata.emptyMetadata
+      roster = None
 
 -- | Kuru kosum venue'su ODUL DAGITAMAZ.
 dryRunVenueCannotPayOut : Script ()
@@ -92,6 +95,7 @@ dryRunVenueCannotPayOut = script do
       instrumentId = testInstrument p.registry
       auditor = None
       meta = Metadata.emptyMetadata
+      roster = None
 
 -- | Slot yolu ATLANARAK dogrudan GameStake yaratilamaz: degismezler artik
 -- kontratin kendisine bagli. Etiket dongu kimligiyle tutmuyorsa reddedilir.

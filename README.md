@@ -8,10 +8,12 @@ is custody of value and the settlement that resolves it.
 Assets follow [CIP-0056](https://lists.sync.global/g/cip-discuss), the Canton
 Network Token Standard — `HoldingV1`, `AllocationV1`, `TransferInstructionV1`.
 
-    package     arccade-game-sdk 1.3.0
-    hash        bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a
+    package     arccade-game-sdk 1.4.0
+    hash        ad08e9ae3090cfbd251324ab9d6f4bec58c672c2716ad7ecc78f2846fe18a02b
     Daml SDK    3.4.10 (LF 2.1)
-    network     vetted on Canton TestNet, settling real Canton Coin
+    network     1.3.0 vetted on Canton TestNet, settling real Canton Coin.
+                1.4.0 is built and tested but NOT yet vetted — vetting is
+                governance-paced, so treat 1.3.0 as what the network runs.
 
 Built and maintained by arCCade, and open to the ecosystem.
 
@@ -84,13 +86,18 @@ copied verbatim from the Splice 0.7.1 release), so no Splice installation and no
 particular host layout is required.
 
     daml build                    # from the repo root, produces the DAR
-    cd test-package && daml test  # 39 tests
+    cd test-package && daml test  # 44 tests
     cd js && npm test             # 56 tests
 
-The build is reproducible against what was vetted: a clone at any path produces
-a DAR whose main package id is exactly
+The build is reproducible: a clone at any path produces a DAR whose main
+package id is exactly
 
-    bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a
+    1.4.0  ad08e9ae3090cfbd251324ab9d6f4bec58c672c2716ad7ecc78f2846fe18a02b
+    1.3.0  bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a
+
+1.3.0 is the id vetted on TestNet, and it rebuilds byte-identically from its own
+commit — which is what makes the upgrade check below meaningful rather than a
+comparison against a DAR nobody can reproduce.
 
 ## Status
 
@@ -107,10 +114,35 @@ Not built, despite `docs/DESIGN.md` describing it: the audit/Merkle anchoring
 module. `docs/DESIGN.md` carries an implementation-status table at the top —
 read it before treating that document as a description of what exists.
 
-One gap is worth naming here rather than leaving to be discovered. The venue's
-`concurrencyLimit` is **not enforced by the contract**.
-`GameVenue_IssueEntitlements` range-checks the slot index against the limit but
-caps neither the number of entitlements a player holds nor their uniqueness, so
-the number of concurrent open cycles is bounded only by the service layer today.
-It is enforced there, and that is a real mitigation — but it is not an on-chain
-guarantee and should not be described as one until 1.4.0 closes it.
+The gap this README used to name here is closed. Through 1.3.0 the venue's
+`concurrencyLimit` was **not enforced by the contract**:
+`GameVenue_IssueEntitlements` range-checked the slot index against the limit but
+capped neither the number of entitlements a player held nor their uniqueness, so
+the number of concurrent open cycles was bounded only by the service layer.
+
+In 1.4.0 it is a ledger rule. Issuance requires a `PlayerRoster`, refuses a
+player already on it, and creates **exactly** `concurrencyLimit` entitlements at
+indices `0..limit-1`. Neither the count nor the uniqueness is asserted from
+caller-supplied input — the caller chooses neither — so the limit holds without
+contract keys, which LF 2.1 does not have.
+
+### Upgrading a venue from 1.3.0
+
+A venue created under 1.3.0 carries no roster and **cannot issue** until the
+operator calls `GameVenue_InitRoster`. That is deliberate: issuance fails closed
+rather than silently falling back to the unenforced behaviour. `InitRoster` is
+one-shot per venue.
+
+The roster is a chain of `PlayerRoster` shards, and the venue holds only a
+pointer to its head. Growth therefore never touches the venue's schema — which
+matters, because Daml upgrades cannot remove a field: a list living in the venue
+would have been permanent, and sharding it later would have meant migrating live
+venues.
+
+`damlc upgrade-check` reports two warnings on this upgrade, both of the form
+`Name ...$$sc_$censure1_1 and name ...$$sc_$censure_1 differ ... reason: Nothing`.
+They are name-comparison artifacts: adding `PlayerRoster`'s `ensure` renumbers
+the compiler's generated constants, and the checker compares those names without
+looking through them. No existing `ensure`, `signatory`, `observer`, or
+`controller` was modified — the diff on the module contains no removals from any
+1.3.0 template, only additions belonging to the new one.

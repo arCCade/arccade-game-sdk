@@ -81,15 +81,30 @@ mkVenue p mode policy =
       instrumentId = testInstrument p.registry
       auditor = Some p.auditor
       meta = Metadata.emptyMetadata
+      roster = None
 
+-- | Venue + kurulu slot defteri. Cogu test bunu ister: defteri olmayan bir
+-- venue slot DAGITAMAZ, ki bu bilerek boyle — zorlamayi istege bagli yapmak
+-- zorlamamak demektir.
+mkVenueWithRoster : Parties -> VenueMode -> VenuePolicy -> Script (ContractId GameVenue)
+mkVenueWithRoster p mode policy = do
+  venueCid <- mkVenue p mode policy
+  submit p.operator do
+    exerciseCmd venueCid GameVenue_InitRoster with shardCapacity = 64
+
+-- | Oyuncuya slot dagitir ve ILKINI dondurur.
+--
+-- Dagitim artik politikanin @concurrencyLimit@ degeri kadar slot uretir —
+-- adet cagirana birakilmaz. Testlerin cogu tek slotla ilgilendigi icin
+-- ilkini alir; adedi ve benzersizligi dogrulayan test ayridir.
 mkEntitlement : Parties -> ContractId GameVenue -> Script (ContractId PlayerEntitlement)
 mkEntitlement p venueCid = do
   cids <- submit p.operator do
     exerciseCmd venueCid GameVenue_IssueEntitlements with
       grants = [EntitlementGrant with player = p.player; concurrencyIndex = 0; tier = "silver"]
   case cids of
-    [cid] -> pure cid
-    _ -> abort "beklenen tek entitlement"
+    (cid :: _) -> pure cid
+    [] -> abort "dagitim hic entitlement uretmedi"
 
 -- | Sartlari ledger saatine gore uretir.
 mkTerms : Parties -> Text -> Text -> Time -> Int -> Decimal -> Decimal -> StakeTerms

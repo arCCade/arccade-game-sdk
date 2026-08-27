@@ -2,6 +2,8 @@
 -- custody kaniti, digest zorlamasi ve oyuncunun koşulsuz cikis yolu.
 module Test.GameSdk.LifecycleTest where
 
+import DA.Assert ((===))
+import DA.List (sort)
 import DA.Time (seconds)
 import Daml.Script
 
@@ -34,7 +36,7 @@ mkLock p terms = do
 fullCycle : Script ()
 fullCycle = script do
   p <- allocParties
-  venueCid <- mkVenue p ModeLive testPolicy
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid
 
   now <- getTime
@@ -90,7 +92,7 @@ fullCycle = script do
 entitlementIsSingleUse : Script ()
 entitlementIsSingleUse = script do
   p <- allocParties
-  venueCid <- mkVenue p ModeLive testPolicy
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid
   now <- getTime
   let terms1 = mkTerms p "tw-a" sampleEntryDigest now 3600 100.0 0.5
@@ -111,7 +113,7 @@ entitlementIsSingleUse = script do
 custodyProofRequired : Script ()
 custodyProofRequired = script do
   p <- allocParties
-  venueCid <- mkVenue p ModeLive testPolicy
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid
   now <- getTime
   let terms = mkTerms p "tw-c" sampleEntryDigest now 3600 100.0 0.5
@@ -134,7 +136,7 @@ custodyProofRequired = script do
 custodyTagMismatch : Script ()
 custodyTagMismatch = script do
   p <- allocParties
-  venueCid <- mkVenue p ModeLive testPolicy
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid
   now <- getTime
   let terms = mkTerms p "tw-d" sampleEntryDigest now 3600 100.0 0.5
@@ -160,7 +162,7 @@ custodyTagMismatch = script do
 digestTamperRejected : Script ()
 digestTamperRejected = script do
   p <- allocParties
-  venueCid <- mkVenue p ModeLive testPolicy
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid
   now <- getTime
   let terms = mkTerms p "tw-e" sampleEntryDigest now 3600 100.0 0.5
@@ -184,7 +186,7 @@ digestTamperRejected = script do
 minCycleDurationEnforced : Script ()
 minCycleDurationEnforced = script do
   p <- allocParties
-  venueCid <- mkVenue p ModeLive testPolicy
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid
   now <- getTime
   let terms = mkTerms p "tw-f" sampleEntryDigest now 3600 100.0 0.5
@@ -207,7 +209,7 @@ minCycleDurationEnforced = script do
 playerSelfRecovery : Script ()
 playerSelfRecovery = script do
   p <- allocParties
-  venueCid <- mkVenue p ModeLive testPolicy
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid
   now <- getTime
   let terms = mkTerms p "tw-g" sampleEntryDigest now 60 100.0 0.5
@@ -232,7 +234,7 @@ dryRunNeedsNoCustody : Script ()
 dryRunNeedsNoCustody = script do
   p <- allocParties
   let dryPolicy = dryRunPolicy
-  venueCid <- mkVenue p ModeDryRun dryPolicy
+  venueCid <- mkVenueWithRoster p ModeDryRun dryPolicy
   entCid <- mkEntitlement p venueCid
   now <- getTime
   let terms = mkTerms p "dry-1" sampleEntryDigest now 3600 100.0 0.01
@@ -257,7 +259,7 @@ dryRunNeedsNoCustody = script do
 timeLockedForfeitRejected : Script ()
 timeLockedForfeitRejected = script do
   p <- allocParties
-  venueCid <- mkVenue p ModeLive testPolicy
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid
   now <- getTime
   let terms = mkTerms p "tw-h" sampleEntryDigest now 3600 100.0 0.5
@@ -281,7 +283,7 @@ timeLockedForfeitRejected = script do
 feeFloorEnforced : Script ()
 feeFloorEnforced = script do
   p <- allocParties
-  venueCid <- mkVenue p ModeLive testPolicy
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid
   now <- getTime
   let terms = mkTerms p "tw-i" sampleEntryDigest now 3600 100.0 0.0   -- ucret yok
@@ -294,7 +296,7 @@ feeFloorEnforced = script do
 lockDurationFloorEnforced : Script ()
 lockDurationFloorEnforced = script do
   p <- allocParties
-  venueCid <- mkVenue p ModeLive testPolicy
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
   entCid <- mkEntitlement p venueCid
   now <- getTime
   let terms = mkTerms p "tw-j" sampleEntryDigest now 30 100.0 0.5   -- 30s < minLockSeconds 60
@@ -302,3 +304,119 @@ lockDurationFloorEnforced = script do
     exerciseCmd entCid Entitlement_Commit with
       gameCode = "trade-wars-v4"; cycleId = "tw-j"; terms
       entryDigest = sampleEntryDigest; stakeMeta = Metadata.emptyMetadata
+
+-- | Ayni oyuncuya ikinci dagitim LEDGER tarafindan reddedilir.
+--
+-- 1.3.0'da bu gecerdi. Es zamanlilik siniri, oyuncuya tam olarak
+-- @concurrencyLimit@ slot verilmesine dayaniyordu ama "tam olarak"i hicbir
+-- sey zorlamiyordu: venue ayni oyuncuya istedigi kadar slot basabilir ve
+-- kendi politikasini anlamsiz kilabilirdi. Testin adi ile kanitladigi seyin
+-- ayni olmasina dikkat: bu test dagitimi olcer, tek kullanimliligi degil.
+secondIssuanceRejected : Script ()
+secondIssuanceRejected = script do
+  p <- allocParties
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
+  _ <- submit p.operator do
+    exerciseCmd venueCid GameVenue_IssueEntitlements with
+      grants = [EntitlementGrant with player = p.player; concurrencyIndex = 0; tier = "silver"]
+
+  -- Dagitim venue'yu tuketip yeniden yaratir; ikinci deneme GUNCEL venue'ya
+  -- yapilmali, yoksa arsivlenmis kontrat yuzunden yanlis sebeple gecersiz olur.
+  venues <- query @GameVenue p.operator
+  case venues of
+    [(currentVenue, _)] ->
+      submitMustFail p.operator do
+        exerciseCmd currentVenue GameVenue_IssueEntitlements with
+          grants = [EntitlementGrant with player = p.player; concurrencyIndex = 0; tier = "gold"]
+    _ -> abort "tek bir guncel venue bekleniyordu"
+
+-- | Dagitim politikanin izin verdigi kadar slot uretir — ne eksik ne fazla —
+-- ve indeksler farklidir.
+--
+-- Adet artik cagirana birakilmiyor: hangi indekslerin uretilecegine politika
+-- karar veriyor, dolayisiyla benzersizlik denetlenen degil YAPISAL bir sey.
+issuanceCreatesExactlyTheLimit : Script ()
+issuanceCreatesExactlyTheLimit = script do
+  p <- allocParties
+  let policy = testPolicy with concurrencyLimit = 3
+  venueCid <- mkVenueWithRoster p ModeLive policy
+  cids <- submit p.operator do
+    exerciseCmd venueCid GameVenue_IssueEntitlements with
+      grants = [EntitlementGrant with player = p.player; concurrencyIndex = 0; tier = "silver"]
+  length cids === 3
+
+  ents <- query @PlayerEntitlement p.player
+  let ixs = map (\(_, e) -> e.concurrencyIndex) ents
+  sort ixs === [0, 1, 2]
+
+-- | Defteri olmayan bir venue slot DAGITAMAZ.
+--
+-- Fail-closed bilerek secildi. Roster'i istege bagli yapmak zorlamayi da
+-- istege bagli yapardi; 1.3.0'dan yukseltilen venue'lar once
+-- @GameVenue_InitRoster@ cagirmak zorunda.
+issuanceNeedsRoster : Script ()
+issuanceNeedsRoster = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy   -- roster = None
+  submitMustFail p.operator do
+    exerciseCmd venueCid GameVenue_IssueEntitlements with
+      grants = [EntitlementGrant with player = p.player; concurrencyIndex = 0; tier = "silver"]
+
+-- | Defter bir kez kurulur.
+--
+-- Ikinci kurulum mevcut zinciri bir kenara birakir ve daha once verilmis
+-- slotlari GORUNMEZ kilardi — yani zorlamayi tek cagriyla sifirlamanin yolu
+-- olurdu.
+rosterInitIsOneShot : Script ()
+rosterInitIsOneShot = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  withRoster <- submit p.operator do
+    exerciseCmd venueCid GameVenue_InitRoster with shardCapacity = 8
+  submitMustFail p.operator do
+    exerciseCmd withRoster GameVenue_InitRoster with shardCapacity = 8
+
+-- | Shard tasmasi zinciri BOZMAZ, ve eski oyuncu hala bulunur.
+--
+-- Bu, bu tasarimda kolayca yanlis yapilan tek sey icin. Ilk yazimda dagitim
+-- kuyruk shard'ini tuketip yeniden yaratiyordu; bu, EBEVEYNININ isaretcisini
+-- arsivlenmis bir kontrata cevirir — derlenir, tek shard'la gecer ve ancak
+-- ikinci shard acilinca patlar. Simdi buyume BASTAN yapiliyor: dolu bas
+-- tuketilmez, onu gosteren yeni bir bas yaratilir.
+--
+-- Kapasite 1 secildi ki ikinci oyuncu tasmayi ZORLASIN.
+shardRolloverKeepsChainIntact : Script ()
+shardRolloverKeepsChainIntact = script do
+  p <- allocParties
+  venueCid <- mkVenue p ModeLive testPolicy
+  v0 <- submit p.operator do
+    exerciseCmd venueCid GameVenue_InitRoster with shardCapacity = 1
+
+  _ <- submit p.operator do
+    exerciseCmd v0 GameVenue_IssueEntitlements with
+      grants = [EntitlementGrant with player = p.player; concurrencyIndex = 0; tier = "silver"]
+  venues1 <- query @GameVenue p.operator
+  currentVenue <- case venues1 of
+    [(cid, _)] -> pure cid
+    _ -> abort "tek guncel venue bekleniyordu"
+
+  -- Ikinci oyuncu basi tasirir: yeni bas, eskisini gosterir.
+  _ <- submit p.operator do
+    exerciseCmd currentVenue GameVenue_IssueEntitlements with
+      grants = [EntitlementGrant with player = p.operator; concurrencyIndex = 0; tier = "gold"]
+
+  -- Zincir saglamsa ILK oyuncu hala bulunur — yani yurumek eski shard'a
+  -- ulasabiliyor ve onun kontrat id'si canli.
+  venues2 <- query @GameVenue p.operator
+  case venues2 of
+    [(cid, v)] -> case v.roster of
+      Some headCid -> do
+        found <- submit p.operator do
+          exerciseCmd headCid Roster_Contains with who = p.player
+        found === True
+        -- Ve ayni oyuncuya ucuncu bir dagitim hala reddedilir.
+        submitMustFail p.operator do
+          exerciseCmd cid GameVenue_IssueEntitlements with
+            grants = [EntitlementGrant with player = p.player; concurrencyIndex = 0; tier = "gold"]
+      None -> abort "roster kurulmus olmaliydi"
+    _ -> abort "tek guncel venue bekleniyordu"
