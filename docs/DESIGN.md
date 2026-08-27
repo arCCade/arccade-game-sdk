@@ -7,7 +7,7 @@
 | Parca | Durum |
 |---|---|
 | `Time`, `Digest`, `Types`, `Policy`, `Custody`, `Cycle` | v1.1.0'da UYGULANDI, TestNet'te vetted |
-| `PlayerRoster` + zincir ustu `concurrencyLimit` zorlamasi | v1.4.0'da UYGULANDI — YAZILDI ve test edildi, **HENUZ VETTED DEGIL** |
+| `PlayerRoster` + zincir ustu `concurrencyLimit` zorlamasi | v1.4.0'da UYGULANDI, 27 Agu 2026'da TestNet'te vetted |
 | `Games.TradeWars`, `Games.PixelRace` adaptorleri | UYGULANDI |
 | Iki yazmalik dongu (commit + settle) | UYGULANDI ve TestNet'te ucdan uca kosuldu |
 | Kip disiplini (`GameVenue.ensure`) | v1.1.0'da UYGULANDI (1.0.0'da EKSIKTI — asagiya bakin) |

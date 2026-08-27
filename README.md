@@ -11,9 +11,9 @@ Network Token Standard — `HoldingV1`, `AllocationV1`, `TransferInstructionV1`.
     package     arccade-game-sdk 1.4.0
     hash        ad08e9ae3090cfbd251324ab9d6f4bec58c672c2716ad7ecc78f2846fe18a02b
     Daml SDK    3.4.10 (LF 2.1)
-    network     1.3.0 vetted on Canton TestNet, settling real Canton Coin.
-                1.4.0 is built and tested but NOT yet vetted — vetting is
-                governance-paced, so treat 1.3.0 as what the network runs.
+    network     vetted on Canton TestNet, settling real Canton Coin.
+                1.3.0 stays vetted alongside it, so contracts created under
+                it keep working.
 
 Built and maintained by arCCade, and open to the ecosystem.
 
@@ -132,6 +132,13 @@ A venue created under 1.3.0 carries no roster and **cannot issue** until the
 operator calls `GameVenue_InitRoster`. That is deliberate: issuance fails closed
 rather than silently falling back to the unenforced behaviour. `InitRoster` is
 one-shot per venue.
+
+This bites the moment 1.4.0 is vetted, not when you choose to adopt it. Canton
+resolves a package-name reference to the highest vetted version, so an existing
+venue is read as 1.4.0 with `roster = None` and refuses to issue. Commit and
+settlement are unaffected — they never touch the roster — so open cycles and
+entitlements already in players' hands keep working. Plan `InitRoster` as part
+of the vetting, not after it.
 
 The roster is a chain of `PlayerRoster` shards, and the venue holds only a
 pointer to its head. Growth therefore never touches the venue's schema — which
