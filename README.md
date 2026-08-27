@@ -11,9 +11,9 @@ Network Token Standard — `HoldingV1`, `AllocationV1`, `TransferInstructionV1`.
     package     arccade-game-sdk 1.5.0
     hash        a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a
     Daml SDK    3.4.10 (LF 2.1)
-    network     1.4.0 vetted on Canton TestNet, settling real Canton Coin;
-                1.5.0 is built and tested but NOT yet vetted. Earlier
-                versions stay vetted, so nothing created under them stops.
+    network     vetted on Canton TestNet, settling real Canton Coin.
+                Earlier versions stay vetted alongside it, so nothing
+                created under them stops working.
 
 Built and maintained by arCCade, and open to the ecosystem.
 
