@@ -10,7 +10,7 @@ dependencies:
   - daml-script
 
 data-dependencies:
-  - ../.daml/dist/arccade-game-sdk-1.4.0.dar
+  - ../.daml/dist/arccade-game-sdk-1.5.0.dar
   - ../vendor/splice-0.7.1/dars/splice-api-token-metadata-v1-current.dar
   - ../vendor/splice-0.7.1/dars/splice-api-token-holding-v1-current.dar
   - ../vendor/splice-0.7.1/dars/splice-api-token-allocation-v1-current.dar

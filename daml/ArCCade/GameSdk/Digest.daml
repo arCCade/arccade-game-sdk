@@ -20,7 +20,7 @@
 module ArCCade.GameSdk.Digest where
 
 import DA.Crypto.Text (sha256, toHex)
-import DA.List (sortOn)
+import DA.List (sortOn, (!!))
 import DA.Text qualified as T
 
 import ArCCade.GameSdk.Time (epochMicros)
@@ -101,6 +101,12 @@ documentDigest schema version kvs = textDigest (canonDocument schema version kvs
 -- HAM BAYTLARININ sha256'sidir. Ucuncu taraf dosyaya duz @sha256sum@
 -- calistirarak ayni degeri elde eder — Daml'e, bu pakete ya da herhangi bir
 -- kutuphaneye ihtiyac duymadan.
+-- BOS METIN KABUL ETMEZ. @toHex ""@ bos dize verir ve @sha256@ onu gecerli
+-- bir hex dizesi saymaz: sonuc, derlemede yakalanmayan bir calisma zamani
+-- @GeneralError@'udur. Kanonik belgeler her zaman sema onekiyle basladigi
+-- icin @documentDigest@ bu duruma DUSEMEZ; risk yalnizca ham metni disaridan
+-- alan yollardadir ve orada bos girdi cagrilmadan once elenir
+-- (bkz. @assertDigestMatches@).
 textDigest : Text -> Text
 textDigest t = sha256 (toHex t)
 
@@ -118,3 +124,95 @@ amountUnits d =
   in if intToDecimal u / 1e10 == d
        then u
        else error ("arccade-sdk-digest-v1: tutar 1e-10 birimine kayipsiz cevrilemedi: " <> show d)
+
+-- ---------------------------------------------------------------------------
+-- Merkle
+-- ---------------------------------------------------------------------------
+--
+-- Donem capasinin (@VenuePeriodAnchor@) altindaki yapi. Ruhen
+-- @Splice.Amulet.CryptoHash@'ten alinmistir ama ASLA import edilmez: import
+-- etmek bir splice-amulet paket kimligini bu pakete civilemek olurdu.
+--
+-- IKI ALAN AYRIMI ZORUNLUDUR — ama koruma @merkleVerify@'in ICINDE DEGIL.
+-- @merkleVerify@ bir hash'i katlar; basladigi degerin yaprak mi ic dugum mu
+-- oldugunu bilemez, dolayisiyla bir ic dugum icin de "gecerli" doner. Koruma
+-- su noktadadir: bir seyin YAPRAK oldugunu iddia etmek, onun on-imgesini
+-- gostermek demektir, ve yaprak on-imgesi @arccade.cycle-audit-row@ semali
+-- bir belgedir; ic dugum ise @arccade.merkle-node@ semalidir. Bir ic dugumu
+-- satir diye sunmak, iki sema arasinda sha256 cakismasi bulmak demektir.
+--
+-- Bu yuzden denetcinin kullanmasi gereken uc @merkleVerify@ degil,
+-- @Audit.periodRowVerify@'dir: yapragi SATIRDAN kendisi hesaplar, boylece
+-- alan ayrimi susleme degil tasiyici olur.
+--
+-- TEK KALAN DUGUM KOPYALANMAZ, YUKSELTILIR. Bitcoin'in son dugumu
+-- kendisiyle esleme yordami, FARKLI yaprak kumelerinin AYNI koku uretmesine
+-- izin verir (CVE-2012-2459). Burada tek kalan dugum bir ust seviyeye
+-- oldugu gibi tasinir. Ayrica @cycleCount@ capa belgesinin icindedir,
+-- dolayisiyla yaprak sayisi da commitment'in parcasidir.
+
+-- | Bos donemin koku. Hic dongu kosmamis bir gun de capalanir: "hicbir sey
+-- olmadi" ile "raporlamadik" ancak boyle ayirt edilir.
+merkleEmpty : Text
+merkleEmpty = documentDigest "arccade.merkle-empty" 1 []
+
+-- | Ic dugum. Yapraklardan AYRI bir sema; bkz. yukaridaki alan ayrimi notu.
+merkleNode : Text -> Text -> Text
+merkleNode l r =
+  documentDigest "arccade.merkle-node" 1 [("l", canonText l), ("r", canonText r)]
+
+-- | Bir seviyeyi ikiserli birlestirir. Tek kalan yukseltilir.
+--
+-- LF 2.1: yerel ozyinelemeli baglama reddedilir ("recursion can only happen
+-- at the top level"), bu yuzden ust seviyededir.
+merklePairUp : [Text] -> [Text]
+merklePairUp [] = []
+merklePairUp [x] = [x]
+merklePairUp (a :: b :: rest) = merkleNode a b :: merklePairUp rest
+
+-- | Koke kadar yurur.
+merkleWalk : [Text] -> Text
+merkleWalk [] = merkleEmpty
+merkleWalk [root] = root
+merkleWalk xs = merkleWalk (merklePairUp xs)
+
+-- | Yapraklarin koku.
+merkleRoot : [Text] -> Text
+merkleRoot = merkleWalk
+
+-- | Icerme kanitinin bir adimi: kardes dugum ve hangi tarafta oldugu.
+data MerkleStep = MerkleStep
+  with
+    siblingOnLeft : Bool
+    sibling : Text
+  deriving (Eq, Show)
+
+-- | Kaniti yaprakdan koke katlar.
+merkleFold : Text -> [MerkleStep] -> Text
+merkleFold acc [] = acc
+merkleFold acc (s :: rest) =
+  merkleFold (if s.siblingOnLeft then merkleNode s.sibling acc else merkleNode acc s.sibling) rest
+
+-- | Yaprak bu kokun altinda mi. Denetcinin tek ihtiyaci budur: yayinlanan
+-- satir, capalanan koke ait mi.
+merkleVerify : Text -> [MerkleStep] -> Text -> Bool
+merkleVerify leaf steps root = merkleFold leaf steps == root
+
+-- | @ix@ numarali yaprak icin icerme kaniti uretir.
+--
+-- Kok yayinlamak ama kanit uretmenin yolunu vermemek ozelligin yarisidir;
+-- denetci kaniti kendisi kurmak zorunda kalirsa agac yordamini tahmin eder.
+merkleProof : Int -> [Text] -> [MerkleStep]
+merkleProof ix leaves =
+  if ix < 0 || ix >= length leaves then [] else merkleProofWalk ix leaves
+
+merkleProofWalk : Int -> [Text] -> [MerkleStep]
+merkleProofWalk _ [] = []
+merkleProofWalk _ [_] = []
+merkleProofWalk ix level =
+  let sibIx = if ix % 2 == 0 then ix + 1 else ix - 1
+      rest = merkleProofWalk (ix / 2) (merklePairUp level)
+  in if sibIx >= length level
+       -- yukseltilmis dugum: bu seviyede kardesi yok
+       then rest
+       else (MerkleStep with siblingOnLeft = ix % 2 == 1; sibling = level !! sibIx) :: rest

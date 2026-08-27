@@ -1,0 +1,189 @@
+-- | Donem capasi — paketin OMISSION (eksiltme) kanitlayan tek mekanizmasi.
+--
+-- NEDEN VAR. Dongu basina iki yazma tasariminin bedeli sudur: sonuc,
+-- settlement'in exercise dugumunde tasinir ve duz akista GORUNMEZ. Bir
+-- denetci Scan'de bir kilidi gorup arCCade'in raporunda o donguyu
+-- bulamazsa, bunu ancak raporun TAMAMININ bir commitment'i varsa
+-- kanitlayabilir. Capa budur: donem basina TEK yazma, o donemdeki
+-- dongulerin %100'u uzerinde bir Merkle koku, ve bir onceki doneme
+-- zincirlenmis bir digest.
+--
+-- NE DEGILDIR. Dongu basina denetim kaydi DEGILDIR ve bilerek oyle
+-- degildir. Dongu basina bir kayit, nitelikli islemin icine deger
+-- tasimayan bir yazma geri koyardi — cerceve tam olarak bundan kacinmak
+-- icin var. 1.000 dongu/gun'de capa, dongu basina bir yazmanin %0,1'ine
+-- mal olur.
+--
+-- HANGI ALAN KANITLANIR, HANGISI BEYANDIR. Bu ayrim onemlidir ve
+-- gizlenmemelidir:
+--
+--   KANITLANIR (Daml yeniden hesaplar, venue yalan soyleyemez)
+--     merkleRootHex, anchorDigest, cycleCount,
+--     committedUnits, feeUnits, returnedUnits, forfeitedUnits, payoutUnits
+--
+--   BEYANDIR (arguman olarak gelir, kontrat dogrulayamaz)
+--     reportUri, reportDigest, prevAnchorDigest,
+--     qualifyingTxCount, nonQualifyingTxCount
+--
+-- Islem siniflandirmasi (nitelikli/niteliksiz) ucret tabani cercevesine
+-- aittir, donguye degil; kontratin icine gomulmesi cerceveyi kontrata
+-- civilerdi. @prevAnchorDigest@ ise zincirin kendisidir ve denetci onu
+-- onceki capa kontratindan okuyarak dogrular — kontrat kendi gecmisini
+-- fetch etmez, cunku bu her capayi bir oncekine kilitler ve tek bir
+-- kacirilmis gun zinciri kalici olarak durdururdu.
+module ArCCade.GameSdk.Audit where
+
+import DA.Optional (optionalToList)
+
+import ArCCade.GameSdk.Digest
+import ArCCade.GameSdk.Types
+
+-- | Rapordaki tek bir dongu. Yaprak budur.
+--
+-- Alanlar, bir denetcinin arCCade'e SORMADAN Scan'den dogrulayabilecegi
+-- olgular etrafinda secildi: @cycleId@ ve @entryDigest@ kilidin
+-- @optContext@'inde, @committedUnits@ kilitli tutarda, @custodyTag@ ikisini
+-- birbirine baglayan degerde. Rapor satiri bunlarla celisiyorsa, celiski
+-- DSO imzali veriye karsi gorunur.
+data CycleAuditRow = CycleAuditRow
+  with
+    cycleId : Text
+    player : Party
+    gameCode : Text
+    concurrencyIndex : Int
+    -- | Giris ve sonuc belgelerinin commitment'lari. Belgelerin kendisi
+    -- zincir disinda, icerik-adresli yayinlanir.
+    entryDigest : Text
+    outcomeDigest : Text
+    -- | Tutarlar TAMSAYI 1e-10 birimidir, @Decimal@ degil. Rapor toplamlari
+    -- ile yaprak baytlari arasinda yuvarlama sorusu kalmaz.
+    committedUnits : Int
+    feeUnits : Int
+    returnedUnits : Int
+    forfeitedUnits : Int
+    payoutUnits : Int
+    disposition : Disposition
+    committedAtMicros : Int
+    settledAtMicros : Int
+    -- | Kilidi donguye baglayan etiket: @arccade-game-sdk:1:\<cycleId\>:\<entryDigest\>@.
+    custodyTag : Text
+  deriving (Eq, Show)
+
+-- | Satirin kanonik metni. Yayinlanan rapor bunu AYNEN icermelidir;
+-- ucuncu taraf duz @sha256sum@ ile yaprak degerini uretir.
+periodLeafDocument : CycleAuditRow -> Text
+periodLeafDocument r =
+  canonDocument "arccade.cycle-audit-row" 1
+    [ ("cycleId", canonText r.cycleId)
+    , ("player", canonParty r.player)
+    , ("gameCode", canonText r.gameCode)
+    , ("concurrencyIndex", canonInt r.concurrencyIndex)
+    , ("entryDigest", canonText r.entryDigest)
+    , ("outcomeDigest", canonText r.outcomeDigest)
+    , ("committedUnits", canonInt r.committedUnits)
+    , ("feeUnits", canonInt r.feeUnits)
+    , ("returnedUnits", canonInt r.returnedUnits)
+    , ("forfeitedUnits", canonInt r.forfeitedUnits)
+    , ("payoutUnits", canonInt r.payoutUnits)
+    , ("disposition", canonText (dispositionTag r.disposition))
+    , ("committedAtMicros", canonInt r.committedAtMicros)
+    , ("settledAtMicros", canonInt r.settledAtMicros)
+    , ("custodyTag", canonText r.custodyTag)
+    ]
+
+-- | Satirin yaprak degeri.
+periodLeaf : CycleAuditRow -> Text
+periodLeaf = textDigest . periodLeafDocument
+
+-- | DENETCININ KULLANMASI GEREKEN UC.
+--
+-- Yaprak degerini SATIRIN KENDISINDEN hesaplar. Ham @merkleVerify@'i bir
+-- hash uzerinde cagirmak, bir ic dugum icin de True doner — cunku katlama
+-- basladigi degerin ne oldugunu bilemez. Yapragi satirdan turetmek, "bu
+-- bir dongu satiridir" iddiasini @arccade.cycle-audit-row@ semasina baglar
+-- ve ic dugumun satir diye sunulmasini sha256 cakismasi problemine cevirir.
+periodRowVerify : CycleAuditRow -> [MerkleStep] -> Text -> Bool
+periodRowVerify row steps root = merkleVerify (periodLeaf row) steps root
+
+-- | Donem toplamlari. @GameVenue_AnchorPeriod@ bunlari SATIRLARDAN turetir;
+-- cagirandan almaz. Aksi halde venue dogru bir kok yayinlayip ozet
+-- alanlarinda yalan soyleyebilirdi — kok, ozetin dogrulugu hakkinda hicbir
+-- sey soylemez.
+data PeriodTotals = PeriodTotals
+  with
+    committedUnits : Int
+    feeUnits : Int
+    returnedUnits : Int
+    forfeitedUnits : Int
+    payoutUnits : Int
+  deriving (Eq, Show)
+
+emptyTotals : PeriodTotals
+emptyTotals = PeriodTotals with
+  committedUnits = 0; feeUnits = 0; returnedUnits = 0
+  forfeitedUnits = 0; payoutUnits = 0
+
+addRow : PeriodTotals -> CycleAuditRow -> PeriodTotals
+addRow t r = PeriodTotals with
+  committedUnits = t.committedUnits + r.committedUnits
+  feeUnits = t.feeUnits + r.feeUnits
+  returnedUnits = t.returnedUnits + r.returnedUnits
+  forfeitedUnits = t.forfeitedUnits + r.forfeitedUnits
+  payoutUnits = t.payoutUnits + r.payoutUnits
+
+sumRows : [CycleAuditRow] -> PeriodTotals
+sumRows = foldl addRow emptyTotals
+
+-- | Capa. Choice'i yoktur: yaratildiktan sonra soyleyecek baska sozu olmayan
+-- bir kayittir. Degistirilmesi gerekiyorsa yeni bir donem capasi yazilir.
+template VenuePeriodAnchor
+  with
+    venue : Party
+    operator : Party
+    venueId : Text
+    mode : VenueMode
+    periodId : Text
+    periodStartMicros : Int
+    periodEndMicros : Int
+    cycleCount : Int
+    committedUnits : Int
+    feeUnits : Int
+    returnedUnits : Int
+    forfeitedUnits : Int
+    payoutUnits : Int
+    qualifyingTxCount : Int
+    nonQualifyingTxCount : Int
+    merkleRootHex : Text
+    reportUri : Text
+    reportDigest : Text
+    prevAnchorDigest : Text
+    anchorDigest : Text
+    auditor : Optional Party
+  where
+    signatory operator
+    observer venue :: optionalToList auditor
+
+-- | Capa belgesinin kanonik metni. @anchorDigest@ bunun sha256'sidir ve
+-- zincirin bir sonraki halkasi bu degeri @prevAnchorDigest@ olarak tasir.
+anchorDocument
+  :  Text -> Text -> Int -> Int -> Int -> PeriodTotals
+  -> Int -> Int -> Text -> Text -> Text -> Text
+anchorDocument venueId periodId startMicros endMicros cycleCount totals
+               qualifyingTxCount nonQualifyingTxCount rootHex reportDigest prevAnchorDigest =
+  canonDocument "arccade.period-anchor" 1
+    [ ("venueId", canonText venueId)
+    , ("periodId", canonText periodId)
+    , ("periodStartMicros", canonInt startMicros)
+    , ("periodEndMicros", canonInt endMicros)
+    , ("cycleCount", canonInt cycleCount)
+    , ("committedUnits", canonInt totals.committedUnits)
+    , ("feeUnits", canonInt totals.feeUnits)
+    , ("returnedUnits", canonInt totals.returnedUnits)
+    , ("forfeitedUnits", canonInt totals.forfeitedUnits)
+    , ("payoutUnits", canonInt totals.payoutUnits)
+    , ("qualifyingTxCount", canonInt qualifyingTxCount)
+    , ("nonQualifyingTxCount", canonInt nonQualifyingTxCount)
+    , ("merkleRootHex", canonText rootHex)
+    , ("reportDigest", canonText reportDigest)
+    , ("prevAnchorDigest", canonText prevAnchorDigest)
+    ]

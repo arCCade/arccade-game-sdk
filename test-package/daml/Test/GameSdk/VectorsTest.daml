@@ -11,11 +11,15 @@
 module Test.GameSdk.VectorsTest where
 
 import DA.Assert ((===))
+import DA.List ((!!))
+import DA.Optional (fromSome)
 import DA.Date (date, Month(Jan))
 import DA.Time (time)
 import Daml.Script
 
+import ArCCade.GameSdk.Audit
 import ArCCade.GameSdk.Digest
+import ArCCade.GameSdk.Types (Disposition(..))
 import ArCCade.GameSdk.Games.PixelRace qualified as PR
 import ArCCade.GameSdk.Games.TradeWars qualified as TW
 
@@ -107,3 +111,44 @@ goldenVectors = script do
     === "5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
   PR.entryDigest samplePrEntry
     === "0b2349e05633cf279ca0ee1d3f5efd8b2308f3e2ee947a32f5c3397e456d0204"
+
+-- | MERKLE ALTIN VEKTORU — Daml / JS / Python ayni koku uretmeli.
+--
+-- Denetci kanidi Daml'de degil, JS ya da Python'da dogrular. Uc uygulamanin
+-- bayt bayt aynı olmasini baglayan sey bu sabitlerdir; biri kayarsa test
+-- duser, sessizce ayrisamazlar.
+merkleVectors : Script ()
+merkleVectors = script do
+  let leaves = map (\n -> textDigest ("leaf-" <> show n)) [1, 2, 3]
+  merkleEmpty === "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0"
+  merkleRoot leaves === "f31cc766e62a52c3c3156e05d53fde76f54fed6067d283dc9a3d8ada9d0ceedf"
+  merkleNode (leaves !! 0) (leaves !! 1)
+    === "aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720"
+
+-- | DENETIM SATIRI ALTIN VEKTORU.
+--
+-- Party @partyFromText@ ile sabitlenir: @allocateParty@ ismin sonuna bir
+-- karma ekler ve altin sabit calisma ortamina bagli hale gelirdi.
+goldenAuditRow : CycleAuditRow
+goldenAuditRow = CycleAuditRow with
+  cycleId = "cycle-golden"
+  player = fromSome (partyFromText "auditor-golden-party")
+  gameCode = "pixel-race-v1"
+  concurrencyIndex = 0
+  entryDigest = "0000000000000000000000000000000000000000000000000000000000000001"
+  outcomeDigest = "0000000000000000000000000000000000000000000000000000000000000002"
+  committedUnits = 300000000000
+  feeUnits = 100000000
+  returnedUnits = 300000000000
+  forfeitedUnits = 0
+  payoutUnits = 0
+  disposition = ReturnedInFull
+  committedAtMicros = 1700000000000000
+  settledAtMicros = 1700000003600000
+  custodyTag = "arccade-game-sdk:1:cycle-golden:x"
+
+-- | Satirin yapragi. JS ve Python ayni degeri uretmek ZORUNDA — denetci
+-- kaniti bu dillerin birinde dogrular, Daml'de degil.
+auditRowVector : Script ()
+auditRowVector = script do
+  periodLeaf goldenAuditRow === "01e89a905ec52a23012354b602cdf583a7bc6dd92d9c36a19aa0346a1cf26237"

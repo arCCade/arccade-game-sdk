@@ -183,3 +183,133 @@ export function toMicros(t) {
 }
 
 export const canonTime = (t) => canonTimeMicros(toMicros(t))
+
+// ---------------------------------------------------------------------------
+// Merkle — donem capasinin dogrulama tarafi
+// ---------------------------------------------------------------------------
+//
+// Kok zincirde hesaplanir; DOGRULAMA burada yapilir. Denetci Daml kosmaz:
+// yayinlanan raporu okur, satiri kanonik metne cevirir, yaprak degerini
+// uretir ve icerme kanitini katlar. Daml tarafiyla bayt bayt ayni olmasi
+// sarttir — altin vektor ikisini birbirine baglar.
+
+/** Bos donemin koku. Dongusuz bir gun de capalanir. */
+export const merkleEmpty = () => documentDigest('arccade.merkle-empty', 1, [])
+
+/** Ic dugum. Yapraklardan AYRI sema; bkz. periodRowVerify. */
+export function merkleNode(l, r) {
+  return documentDigest('arccade.merkle-node', 1, [['l', canonText(l)], ['r', canonText(r)]])
+}
+
+/** Bir seviyeyi ikiserli birlestirir; tek kalan YUKSELTILIR, kopyalanmaz. */
+export function merklePairUp(level) {
+  const out = []
+  for (let i = 0; i < level.length; i += 2) {
+    out.push(i + 1 < level.length ? merkleNode(level[i], level[i + 1]) : level[i])
+  }
+  return out
+}
+
+export function merkleRoot(leaves) {
+  if (leaves.length === 0) return merkleEmpty()
+  let level = leaves
+  while (level.length > 1) level = merklePairUp(level)
+  return level[0]
+}
+
+/** `ix` numarali yaprak icin icerme kaniti: `[{siblingOnLeft, sibling}]`. */
+export function merkleProof(ix, leaves) {
+  if (ix < 0 || ix >= leaves.length) return []
+  const steps = []
+  let level = leaves
+  let i = ix
+  while (level.length > 1) {
+    const sibIx = i % 2 === 0 ? i + 1 : i - 1
+    // yukseltilmis dugumun bu seviyede kardesi yoktur
+    if (sibIx < level.length) {
+      steps.push({ siblingOnLeft: i % 2 === 1, sibling: level[sibIx] })
+    }
+    level = merklePairUp(level)
+    i = Math.floor(i / 2)
+  }
+  return steps
+}
+
+export function merkleFold(leaf, steps) {
+  return steps.reduce(
+    (acc, s) => (s.siblingOnLeft ? merkleNode(s.sibling, acc) : merkleNode(acc, s.sibling)),
+    leaf,
+  )
+}
+
+export function merkleVerify(leaf, steps, root) {
+  return merkleFold(leaf, steps) === root
+}
+
+/**
+ * Bir denetim satirinin kanonik metni. Yayinlanan rapor bunu AYNEN
+ * icermelidir. Alan adlari ve siralari Daml `Audit.periodLeafDocument` ile
+ * birebir ayni olmak zorundadir.
+ *
+ * Tutarlar TAMSAYI 1e-10 birimi olarak verilir (`committedUnits` vb.),
+ * ondalik olarak degil.
+ */
+export const DISPOSITIONS = Object.freeze([
+  'returned-in-full',
+  'returned-with-forfeit',
+  'forfeited-in-full',
+  'aborted',
+  'expired-unsettled',
+])
+
+/**
+ * Disposition ETIKETTIR, constructor adi DEGIL.
+ *
+ * Daml `dispositionTag` `ReturnedInFull` -> `"returned-in-full"` uretir.
+ * Cagiran `"ReturnedInFull"` gecerse belge sessizce farkli baytlar uretir ve
+ * yaprak Daml'inkiyle tutmaz — bu hata ancak bir denetci kaniti dogrulamaya
+ * calistiginda, yani en gec anda ortaya cikardi. Bu yuzden dogrulanir.
+ */
+export function assertDisposition(d) {
+  if (!DISPOSITIONS.includes(d)) {
+    throw new Error(
+      `arccade-sdk-digest-v1: gecersiz disposition: ${JSON.stringify(d)}; ` +
+      `beklenen etiketler: ${DISPOSITIONS.join(', ')}`,
+    )
+  }
+  return d
+}
+
+export function periodLeafDocument(row) {
+  return canonDocument('arccade.cycle-audit-row', 1, [
+    ['cycleId', canonText(row.cycleId)],
+    ['player', canonParty(row.player)],
+    ['gameCode', canonText(row.gameCode)],
+    ['concurrencyIndex', canonInt(row.concurrencyIndex)],
+    ['entryDigest', canonText(row.entryDigest)],
+    ['outcomeDigest', canonText(row.outcomeDigest)],
+    ['committedUnits', canonInt(row.committedUnits)],
+    ['feeUnits', canonInt(row.feeUnits)],
+    ['returnedUnits', canonInt(row.returnedUnits)],
+    ['forfeitedUnits', canonInt(row.forfeitedUnits)],
+    ['payoutUnits', canonInt(row.payoutUnits)],
+    ['disposition', canonText(assertDisposition(row.disposition))],
+    ['committedAtMicros', canonInt(row.committedAtMicros)],
+    ['settledAtMicros', canonInt(row.settledAtMicros)],
+    ['custodyTag', canonText(row.custodyTag)],
+  ])
+}
+
+export const periodLeaf = (row) => textDigest(periodLeafDocument(row))
+
+/**
+ * DENETCININ KULLANMASI GEREKEN UC.
+ *
+ * Yapragi SATIRDAN hesaplar. Ham `merkleVerify`'i bir hash uzerinde cagirmak
+ * bir ic dugum icin de true doner — katlama, basladigi degerin ne oldugunu
+ * bilemez. Yapragi satirdan turetmek, "bu bir dongu satiridir" iddiasini
+ * `arccade.cycle-audit-row` semasina baglar.
+ */
+export function periodRowVerify(row, steps, root) {
+  return merkleVerify(periodLeaf(row), steps, root)
+}

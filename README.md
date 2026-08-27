@@ -8,12 +8,12 @@ is custody of value and the settlement that resolves it.
 Assets follow [CIP-0056](https://lists.sync.global/g/cip-discuss), the Canton
 Network Token Standard — `HoldingV1`, `AllocationV1`, `TransferInstructionV1`.
 
-    package     arccade-game-sdk 1.4.0
-    hash        ad08e9ae3090cfbd251324ab9d6f4bec58c672c2716ad7ecc78f2846fe18a02b
+    package     arccade-game-sdk 1.5.0
+    hash        a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a
     Daml SDK    3.4.10 (LF 2.1)
-    network     vetted on Canton TestNet, settling real Canton Coin.
-                1.3.0 stays vetted alongside it, so contracts created under
-                it keep working.
+    network     1.4.0 vetted on Canton TestNet, settling real Canton Coin;
+                1.5.0 is built and tested but NOT yet vetted. Earlier
+                versions stay vetted, so nothing created under them stops.
 
 Built and maintained by arCCade, and open to the ecosystem.
 
@@ -86,18 +86,20 @@ copied verbatim from the Splice 0.7.1 release), so no Splice installation and no
 particular host layout is required.
 
     daml build                    # from the repo root, produces the DAR
-    cd test-package && daml test  # 44 tests
-    cd js && npm test             # 56 tests
+    cd test-package && daml test  # 58 tests
+    cd js && npm test             # 64 tests
 
 The build is reproducible: a clone at any path produces a DAR whose main
 package id is exactly
 
+    1.5.0  a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a
     1.4.0  ad08e9ae3090cfbd251324ab9d6f4bec58c672c2716ad7ecc78f2846fe18a02b
     1.3.0  bc607f6c6dbb3b29b38ff2428fe63f99068f9b67a8ce709a123378c1471c7e5a
 
-1.3.0 is the id vetted on TestNet, and it rebuilds byte-identically from its own
-commit — which is what makes the upgrade check below meaningful rather than a
-comparison against a DAR nobody can reproduce.
+Each vetted id rebuilds byte-identically from its own commit — which is what
+makes the upgrade check meaningful rather than a comparison against a DAR
+nobody can reproduce. `damlc upgrade-check` reports **no errors and no
+warnings** from 1.4.0 to 1.5.0.
 
 ## Status
 
@@ -110,9 +112,40 @@ commit and lock in one transaction, settle and unlock in one transaction, funds
 returned in full. The player-alone recovery path has been used in anger too —
 three stranded cycles were closed with `actAs: [player]` and nothing else.
 
-Not built, despite `docs/DESIGN.md` describing it: the audit/Merkle anchoring
-module. `docs/DESIGN.md` carries an implementation-status table at the top —
-read it before treating that document as a description of what exists.
+`docs/DESIGN.md` carries an implementation-status table at the top — read it
+before treating that document as a description of what exists.
+
+### Proving an omission (1.5.0)
+
+The two-write cycle carries its outcome in the settlement's exercise node, so
+a consumer on the flat stream sees a create and an archive. That is the
+deliberate price of writing little — but it leaves one question unanswerable:
+an auditor who sees a lock on Scan and cannot find that cycle in arCCade's
+report has no way to prove it was **omitted** rather than merely unseen.
+
+`GameVenue_AnchorPeriod` closes that. One write per venue per period (a UTC
+day by default) carrying a Merkle root over **every** cycle in the period,
+chained to the previous period's digest. At 1,000 cycles/day it costs 0.1% of
+one write per cycle. There is deliberately no per-cycle audit record — that
+would put a non-value write back inside the qualifying transaction, which is
+what this design exists to avoid.
+
+Two properties are worth stating because they are what make the anchor
+evidence rather than a claim:
+
+**The root and the money totals are recomputed in Daml.** The caller passes
+rows, not a root. A correct root says nothing about whether the summary
+fields are correct, so the totals are summed from the same rows on-ledger.
+
+**Leaves and internal nodes hash in different domains, and a lone node is
+promoted rather than duplicated.** Duplicating it — the Bitcoin convention —
+lets two different cycle sets produce the same root (CVE-2012-2459).
+
+The auditor's entry point is `periodRowVerify`, not raw `merkleVerify`: it
+derives the leaf from the row itself, which is what binds "this is a cycle"
+to the row schema. Verification is implemented in Daml, JavaScript and
+Python, locked together by golden vectors — an auditor checks a proof in the
+language they already have, not in Daml.
 
 The gap this README used to name here is closed. Through 1.3.0 the venue's
 `concurrencyLimit` was **not enforced by the contract**:

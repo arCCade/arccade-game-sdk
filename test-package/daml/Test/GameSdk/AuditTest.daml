@@ -1,0 +1,234 @@
+-- | Donem capasi ve Merkle agaci.
+--
+-- Buradaki testlerin isi "kok hesaplandi mi" degil, KANIT SISTEMININ
+-- YALAN SOYLEYEMEDIGINI gostermektir: uydurulmus bir satir dogrulanamamali,
+-- farkli satir kumeleri farkli kok uretmeli, ve capa kendi icerigiyle
+-- celisememeli.
+module Test.GameSdk.AuditTest where
+
+import Daml.Script
+
+import DA.Assert ((===))
+import DA.Foldable (forA_)
+import DA.List ((!!))
+
+import ArCCade.GameSdk.Audit
+import ArCCade.GameSdk.Cycle
+import ArCCade.GameSdk.Digest
+import ArCCade.GameSdk.Types
+
+import Test.GameSdk.Fixture
+
+-- | Deterministik ornek satir. @n@ her alani ayirir ki iki satir asla
+-- tesadufen ayni yapragi uretmesin.
+mkRow : Party -> Int -> CycleAuditRow
+mkRow player n = CycleAuditRow with
+  cycleId = "cycle-" <> show n
+  player
+  gameCode = "pixel-race-v1"
+  concurrencyIndex = 0
+  entryDigest = textDigest ("entry-" <> show n)
+  outcomeDigest = textDigest ("outcome-" <> show n)
+  committedUnits = 300000000000 + n      -- 30 CC + ayirt edici
+  feeUnits = 100000000
+  returnedUnits = 300000000000 + n
+  forfeitedUnits = 0
+  payoutUnits = 0
+  disposition = ReturnedInFull
+  committedAtMicros = 1700000000000000 + n
+  settledAtMicros = 1700000003600000 + n
+  custodyTag = "arccade-game-sdk:1:cycle-" <> show n <> ":x"
+
+-- ---------------------------------------------------------------------------
+-- Merkle
+-- ---------------------------------------------------------------------------
+
+-- | Hic dongu kosmamis bir gun de capalanabilmeli. "Hicbir sey olmadi" ile
+-- "raporlamadik" ancak boyle ayirt edilir.
+emptyPeriodHasARoot : Script ()
+emptyPeriodHasARoot = do
+  merkleRoot [] === merkleEmpty
+  -- Bos kok, gercek bir yapragin degeriyle karisamaz.
+  assertMsg "bos kok yaprakla karisamaz" (merkleEmpty /= textDigest "x")
+
+-- | Tek yaprakli agacin koku yapragin kendisidir.
+singleLeafIsItsOwnRoot : Script ()
+singleLeafIsItsOwnRoot = do
+  let leaf = textDigest "yalniz"
+  merkleRoot [leaf] === leaf
+
+-- | HER boyut ve HER indeks icin icerme kaniti dogrulanmali.
+--
+-- Tek sayida yaprak, "yukseltme" yolunu zorlar; kanitin o seviyede adim
+-- URETMEMESI gerekir. Bir tek boyutu test etmek bu yolu tamamen atlardi.
+inclusionProofsVerifyAtEverySize : Script ()
+inclusionProofsVerifyAtEverySize = do
+  p <- allocParties
+  forA_ [1 .. 9] $ \n -> do
+    let leaves = map (periodLeaf . mkRow p.player) [1 .. n]
+        root = merkleRoot leaves
+    forA_ [0 .. n - 1] $ \ix -> do
+      let proof = merkleProof ix leaves
+      assertMsg
+        ("boyut " <> show n <> " indeks " <> show ix <> " kaniti dogrulanmadi")
+        (merkleVerify (leaves !! ix) proof root)
+
+-- | Uydurulmus satir dogrulanmamali. Kanit sisteminin tek isi budur.
+forgedRowDoesNotVerify : Script ()
+forgedRowDoesNotVerify = do
+  p <- allocParties
+  let rows = map (mkRow p.player) [1 .. 5]
+      leaves = map periodLeaf rows
+      root = merkleRoot leaves
+      -- Rapordaki satirla ayni yerde duran, ama tutari degistirilmis satir.
+      forged = (rows !! 2) with committedUnits = 999900000000
+  assertMsg "gercek satir dogrulanmali"
+    (periodRowVerify (rows !! 2) (merkleProof 2 leaves) root)
+  assertMsg "UYDURULMUS SATIR DOGRULANDI"
+    (not (periodRowVerify forged (merkleProof 2 leaves) root))
+
+-- | Baska bir indeksin kaniti bu satiri dogrulamamali.
+proofIsBoundToItsPosition : Script ()
+proofIsBoundToItsPosition = do
+  p <- allocParties
+  let rows = map (mkRow p.player) [1 .. 6]
+      leaves = map periodLeaf rows
+      root = merkleRoot leaves
+  assertMsg "yanlis konumun kaniti kabul edildi"
+    (not (periodRowVerify (rows !! 1) (merkleProof 4 leaves) root))
+
+-- | TEK KALAN DUGUM KOPYALANMAZ.
+--
+-- Bitcoin'in son yapragi kendisiyle esleme yordami, [a,b,c] ile [a,b,c,c]
+-- kumelerine AYNI koku verir (CVE-2012-2459) — yani bir denetci, raporda
+-- olmayan bir donguyu varmis gibi gosteremese de, iki farkli rapor ayni
+-- capaya sigabilirdi. Burada yukseltme kullanildigi icin kokler AYRISIR.
+oddLeafIsPromotedNotDuplicated : Script ()
+oddLeafIsPromotedNotDuplicated = do
+  p <- allocParties
+  let [a, b, c] = map (periodLeaf . mkRow p.player) [1, 2, 3]
+  assertMsg "tek kalan yaprak kopyalanmis: iki farkli kume ayni koku uretti"
+    (merkleRoot [a, b, c] /= merkleRoot [a, b, c, c])
+
+-- | Yaprak ve ic dugum FARKLI alanlarda hash'lenmeli.
+--
+-- Ayni olsalardi bir ic dugum satir diye sunulabilirdi. Testin olcttugu
+-- sey: iki alanin ayni girdi icin ayni degeri URETMEMESI.
+leafAndNodeAreDifferentDomains : Script ()
+leafAndNodeAreDifferentDomains = do
+  let x = textDigest "x"
+      y = textDigest "y"
+  assertMsg "dugum ve bos-kok alanlari cakisiyor" (merkleNode x y /= merkleEmpty)
+  assertMsg "dugum alani duz birlestirmeye esit" (merkleNode x y /= textDigest (x <> y))
+
+-- ---------------------------------------------------------------------------
+-- Capa
+-- ---------------------------------------------------------------------------
+
+-- | Capa, koku ve para toplamlarini KENDISI hesaplar.
+anchorRecomputesRootAndTotals : Script ()
+anchorRecomputesRootAndTotals = do
+  p <- allocParties
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
+  let rows = map (mkRow p.player) [1 .. 4]
+  anchorCid <- submit p.operator do
+    exerciseCmd venueCid GameVenue_AnchorPeriod with
+      periodId = "2026-08-27"
+      periodStartMicros = 1700000000000000
+      periodEndMicros = 1700086400000000
+      rows
+      qualifyingTxCount = 8
+      nonQualifyingTxCount = 1
+      reportUri = "https://reports.arccade.io/2026-08-27.json"
+      reportDigest = textDigest "rapor"
+      prevAnchorDigest = textDigest "onceki"
+  Some anchor <- queryContractId p.operator anchorCid
+  anchor.cycleCount === 4
+  anchor.merkleRootHex === merkleRoot (map periodLeaf rows)
+  -- toplamlar satirlardan turedi, cagirandan gelmedi
+  anchor.committedUnits === sum (map (.committedUnits) rows)
+  anchor.feeUnits === 400000000
+  anchor.payoutUnits === 0
+  anchor.anchorDigest === textDigest
+    (anchorDocument anchor.venueId "2026-08-27" 1700000000000000 1700086400000000
+       4 (sumRows rows) 8 1 anchor.merkleRootHex (textDigest "rapor") (textDigest "onceki"))
+
+-- | Ayni cycleId iki kez sayilamaz. Bir dongunun iki satirla iki kez
+-- raporlanmasi, toplamlari sessizce sisirirdi.
+duplicateCycleIdRejected : Script ()
+duplicateCycleIdRejected = do
+  p <- allocParties
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
+  let r = mkRow p.player 1
+  submitMustFail p.operator do
+    exerciseCmd venueCid GameVenue_AnchorPeriod with
+      periodId = "2026-08-27"
+      periodStartMicros = 1700000000000000
+      periodEndMicros = 1700086400000000
+      rows = [r, mkRow p.player 2, r]
+      qualifyingTxCount = 6
+      nonQualifyingTxCount = 0
+      reportUri = "x"
+      reportDigest = textDigest "rapor"
+      prevAnchorDigest = ""
+
+-- | Ters ya da sifir uzunluklu donem reddedilmeli.
+reversedPeriodRejected : Script ()
+reversedPeriodRejected = do
+  p <- allocParties
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
+  submitMustFail p.operator do
+    exerciseCmd venueCid GameVenue_AnchorPeriod with
+      periodId = "ters"
+      periodStartMicros = 1700086400000000
+      periodEndMicros = 1700000000000000
+      rows = []
+      qualifyingTxCount = 0
+      nonQualifyingTxCount = 0
+      reportUri = "x"
+      reportDigest = ""
+      prevAnchorDigest = ""
+
+-- | Bos donem capalanabilir — ve koku bos-kok olur.
+emptyPeriodCanStillBeAnchored : Script ()
+emptyPeriodCanStillBeAnchored = do
+  p <- allocParties
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
+  anchorCid <- submit p.operator do
+    exerciseCmd venueCid GameVenue_AnchorPeriod with
+      periodId = "sessiz-gun"
+      periodStartMicros = 1700000000000000
+      periodEndMicros = 1700086400000000
+      rows = []
+      qualifyingTxCount = 0
+      nonQualifyingTxCount = 0
+      reportUri = "https://reports.arccade.io/sessiz.json"
+      reportDigest = textDigest "bos"
+      prevAnchorDigest = textDigest "onceki"
+  Some anchor <- queryContractId p.operator anchorCid
+  anchor.cycleCount === 0
+  anchor.merkleRootHex === merkleEmpty
+  anchor.committedUnits === 0
+
+-- | Capalamak venue'yu TUKETMEZ: gunluk is, oyuncu kabul eden uce vurmamali.
+anchoringDoesNotConsumeTheVenue : Script ()
+anchoringDoesNotConsumeTheVenue = do
+  p <- allocParties
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
+  let anchorOnce periodId = submit p.operator do
+        exerciseCmd venueCid GameVenue_AnchorPeriod with
+          periodId
+          periodStartMicros = 1700000000000000
+          periodEndMicros = 1700086400000000
+          rows = [mkRow p.player 1]
+          qualifyingTxCount = 2
+          nonQualifyingTxCount = 0
+          reportUri = "x"
+          reportDigest = ""
+          prevAnchorDigest = ""
+  _ <- anchorOnce "gun-1"
+  -- ayni cid ikinci kez kullanilabiliyorsa tuketilmemistir
+  _ <- anchorOnce "gun-2"
+  -- ve venue hala basim yapabiliyor
+  _ <- mkEntitlement p venueCid
+  pure ()

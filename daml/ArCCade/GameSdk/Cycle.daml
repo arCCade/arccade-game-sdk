@@ -26,12 +26,14 @@
 -- okumak zorundadir. Bu, bu participant uzerinde dogrulanmistir.
 module ArCCade.GameSdk.Cycle where
 
+import DA.List (dedup)
 import DA.Optional (isNone, optionalToList)
 import DA.Text qualified as T
 
 import Splice.Api.Token.HoldingV1 qualified as Holding
 import Splice.Api.Token.MetadataV1 qualified as Metadata
 
+import ArCCade.GameSdk.Audit
 import ArCCade.GameSdk.Custody
 import ArCCade.GameSdk.Digest
 import ArCCade.GameSdk.Policy
@@ -46,9 +48,13 @@ import ArCCade.GameSdk.Types
 assertDigestMatches : Text -> Text -> Optional Text -> Update ()
 assertDigestMatches _ _ None = pure ()
 assertDigestMatches label expected (Some preimage) =
+  -- @&&@ solunu once ve tembel degerlendirir; bos on-imge @textDigest@'e HIC
+  -- ULASMAZ. Ulassaydi hex olmayan girdi yuzunden @GeneralError@ ile patlar
+  -- ve cagiran "digest uyusmuyor" yerine anlamsiz bir hata gorurdu. Iki
+  -- durumda da islem reddedilir; degisen sey cagiranin ne ogrendigidir.
   assertMsg
     (label <> " belgesi saklanan digest ile uyusmuyor")
-    (textDigest preimage == expected)
+    (preimage /= "" && textDigest preimage == expected)
 
 -- | Slot dagitiminin ZINCIR USTU defteri — bir shard'i.
 --
@@ -243,6 +249,61 @@ template GameVenue
       controller operator
       do
         create this with auditor = newAuditor
+
+    -- | Donemi capalar: o donemdeki TUM dongulerin uzerinde bir Merkle koku.
+    --
+    -- TUKETICI DEGIL. Capa donguyle ilgisiz bir islemdir ve venue'yu
+    -- tuketirse basim ve capa ayni kontrat uzerinde cekisirdi. Gunde bir
+    -- kez calisan bir isin, oyuncu kabul eden bir uce vurmasi icin hicbir
+    -- sebep yok.
+    --
+    -- KOK VE TOPLAMLAR DAML'DE YENIDEN HESAPLANIR. Cagiran kok veremez;
+    -- satirlari verir ve kok onlardan turer. Para toplamlari da oyle:
+    -- dogru bir kok, ozet alanlarinin dogrulugu hakkinda HICBIR SEY
+    -- soylemez, dolayisiyla onlari da cagirandan almak capayi kendi
+    -- icerigiyle celisebilir yapardi.
+    --
+    -- MALIYET DURUSTCE: @rows@ choice argumanidir, yani ACS'ye girmez ama
+    -- islem yukunde tasinir ve yorumlama O(N)'dir. 1.000 satirlik bir gun
+    -- tek islemde capalanir; daha buyuk venue'lar donemi bolmelidir.
+    nonconsuming choice GameVenue_AnchorPeriod : ContractId VenuePeriodAnchor
+      with
+        periodId : Text
+        periodStartMicros : Int
+        periodEndMicros : Int
+        rows : [CycleAuditRow]
+        -- Bunlar BEYANDIR, kanit degil: islem siniflandirmasi ucret tabani
+        -- cercevesine aittir ve kontrat onu dogrulayamaz. Audit.daml'in
+        -- basindaki "hangi alan kanitlanir" notuna bakin.
+        qualifyingTxCount : Int
+        nonQualifyingTxCount : Int
+        reportUri : Text
+        reportDigest : Text
+        prevAnchorDigest : Text
+      controller operator
+      do
+        assertMsg "donem bos ya da ters" (periodEndMicros > periodStartMicros)
+        assertMsg "donemde ayni cycleId birden fazla kez var"
+          (length (dedup (map (.cycleId) rows)) == length rows)
+        let totals = sumRows rows
+            root = merkleRoot (map periodLeaf rows)
+            doc = anchorDocument venueId periodId periodStartMicros periodEndMicros
+                    (length rows) totals qualifyingTxCount nonQualifyingTxCount
+                    root reportDigest prevAnchorDigest
+        create VenuePeriodAnchor with
+          venue; operator; venueId; mode; periodId
+          periodStartMicros; periodEndMicros
+          cycleCount = length rows
+          committedUnits = totals.committedUnits
+          feeUnits = totals.feeUnits
+          returnedUnits = totals.returnedUnits
+          forfeitedUnits = totals.forfeitedUnits
+          payoutUnits = totals.payoutUnits
+          qualifyingTxCount; nonQualifyingTxCount
+          merkleRootHex = root
+          reportUri; reportDigest; prevAnchorDigest
+          anchorDigest = textDigest doc
+          auditor
 
 -- | Oyuncunun slot jetonu — contract key'lerin olmadigi bir dunyada
 -- "oyuncu basina es zamanli dongu limiti"nin ledger tarafindan zorlanan

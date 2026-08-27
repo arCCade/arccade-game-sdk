@@ -12,8 +12,8 @@
 | Iki yazmalik dongu (commit + settle) | UYGULANDI ve TestNet'te ucdan uca kosuldu |
 | Kip disiplini (`GameVenue.ensure`) | v1.1.0'da UYGULANDI (1.0.0'da EKSIKTI — asagiya bakin) |
 | Python referans implementasyonu + altin vektor | UYGULANDI, `daml test` ile zorlaniyor |
-| `Audit` modulu, `CycleAuditRow`, `VenuePeriodAnchor`, Merkle yardimcilari | **YAZILMADI** — spesifikasyondaki "ships/tested" ifadeleri gecersiz |
-| `GameVenue_AnchorPeriod` | **YAZILMADI** |
+| `Audit` modulu, `CycleAuditRow`, `VenuePeriodAnchor`, Merkle yardimcilari | v1.5.0'da UYGULANDI — Daml/JS/Python paritesi altin vektorle kilitli, **HENUZ VETTED DEGIL** |
+| `GameVenue_AnchorPeriod` | v1.5.0'da UYGULANDI, mutasyonla dogrulandi |
 | Java digest portu | **YAZILMADI** |
 | Backend entegrasyonu (commitment/settlement yolu, Pixel Race stake-at-start) | **YAZILMADI** |
 | Canli custody (gercek `LockedAmulet`) | **KOSULMADI** — TestNet cuzdaninda 0 CC var; mekanik MainNet'te zaten calisiyor |
