@@ -10,7 +10,7 @@ import Daml.Script
 
 import DA.Assert ((===))
 import DA.Foldable (forA_)
-import DA.List ((!!))
+import DA.List ((!!), head)
 
 import ArCCade.GameSdk.Audit
 import ArCCade.GameSdk.Cycle
@@ -232,3 +232,112 @@ anchoringDoesNotConsumeTheVenue = do
   -- ve venue hala basim yapabiliyor
   _ <- mkEntitlement p venueCid
   pure ()
+
+-- ---------------------------------------------------------------------------
+-- Zincir butunlugu
+-- ---------------------------------------------------------------------------
+--
+-- Capalarin zinciri, tek tek capalarin toplamindan FAZLASINI verir: bir
+-- donemin icerigini sonradan degistirmek, o donemin @anchorDigest@'ini ve
+-- dolayisiyla ONDAN SONRAKI HER HALKAYI degistirir. Gecmisi yeniden yazmak
+-- tek bir kaydi degil, kuyrugun tamamini tazelemeyi gerektirir.
+--
+-- Buradaki testler o ozelligi olcer VE sinirini gosterir: kontrat
+-- @prevAnchorDigest@'i DOGRULAMAZ. Bu bilincli — her capayi bir oncekine
+-- kilitlemek, kacirilan tek bir gunun zinciri kalici olarak durdurmasi
+-- demekti. Zincir kanittir, zorlama degil; dogrulama denetcinin tarafinda
+-- yapilir ve bu ayrim gizlenmemelidir.
+
+anchorAt
+  :  Parties -> ContractId GameVenue -> Text -> [CycleAuditRow] -> Text
+  -> Script (ContractId VenuePeriodAnchor)
+anchorAt p venueCid periodId rows prevAnchorDigest =
+  submit p.operator do
+    exerciseCmd venueCid GameVenue_AnchorPeriod with
+      periodId
+      periodStartMicros = 1700000000000000
+      periodEndMicros = 1700086400000000
+      rows
+      qualifyingTxCount = 2 * length rows
+      nonQualifyingTxCount = 0
+      reportUri = "https://reports.arccade.io/" <> periodId <> ".json"
+      reportDigest = textDigest ("rapor-" <> periodId)
+      prevAnchorDigest
+
+-- | Iki donem birbirine baglanir ve halka gercekten tasinir.
+periodsChainToEachOther : Script ()
+periodsChainToEachOther = do
+  p <- allocParties
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
+  a1 <- anchorAt p venueCid "gun-1" (map (mkRow p.player) [1, 2]) ""
+  Some anchor1 <- queryContractId p.operator a1
+  a2 <- anchorAt p venueCid "gun-2" (map (mkRow p.player) [3, 4]) anchor1.anchorDigest
+  Some anchor2 <- queryContractId p.operator a2
+  anchor2.prevAnchorDigest === anchor1.anchorDigest
+  assertMsg "iki donem ayni capa digest'ini uretti"
+    (anchor1.anchorDigest /= anchor2.anchorDigest)
+
+-- | ZINCIRIN TASIYICI OZELLIGI.
+--
+-- Ayni donem icerigi, FARKLI bir ebeveynle capalandiginda FARKLI bir
+-- @anchorDigest@ uretmeli. Uretmeseydi bir donemi sessizce yeniden
+-- ebeveynlemek — yani araya donem sokusturmak ya da bir gunu zincirden
+-- dusurmek — sonraki halkalarda hicbir iz birakmazdi.
+reparentingChangesTheDigest : Script ()
+reparentingChangesTheDigest = do
+  p <- allocParties
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
+  let rows = map (mkRow p.player) [1, 2]
+  a <- anchorAt p venueCid "gun-x" rows (textDigest "ebeveyn-A")
+  b <- anchorAt p venueCid "gun-x" rows (textDigest "ebeveyn-B")
+  Some anchorA <- queryContractId p.operator a
+  Some anchorB <- queryContractId p.operator b
+  anchorA.merkleRootHex === anchorB.merkleRootHex     -- icerik ayni
+  assertMsg "ebeveyn degisti ama capa digest'i degismedi: zincir kopuk"
+    (anchorA.anchorDigest /= anchorB.anchorDigest)
+
+-- | Ve icerik degisirse digest degismeli — capa KOKE baglidir.
+--
+-- Kurcalanan alan BILEREK para disi secildi: tutar degistirilseydi
+-- toplamlar da degisirdi ve digest ZATEN kayardi — test o zaman "capa
+-- toplamlara bagli" derdi, "koke bagli" degil. Mutasyon testi tam bunu
+-- yakaladi: @merkleRootHex@ capa belgesinden cikarildiginda ilk yazdigim
+-- surum hala geciyordu. @entryDigest@ toplamlara girmez, yalnizca yaprak
+-- uzerinden koke girer; boylece test tek bir seyi olcer.
+changingOneRowChangesTheDigest : Script ()
+changingOneRowChangesTheDigest = do
+  p <- allocParties
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
+  let rows = map (mkRow p.player) [1, 2]
+      -- `with` cok alanli guncelleme sozdizimi virgulu YUTAR; liste
+      -- icinde dogrudan yazilirsa `rows` bir alan adi sanilir.
+      firstTampered = (head rows) with entryDigest = textDigest "kurcalanmis"
+      tampered = [firstTampered, rows !! 1]
+  a <- anchorAt p venueCid "gun-y" rows ""
+  b <- anchorAt p venueCid "gun-y" tampered ""
+  Some anchorA <- queryContractId p.operator a
+  Some anchorB <- queryContractId p.operator b
+  -- toplamlar AYNI: fark yalnizca kokte
+  anchorA.committedUnits === anchorB.committedUnits
+  anchorA.feeUnits === anchorB.feeUnits
+  assertMsg "tek satir degisti ama kok ayni kaldi"
+    (anchorA.merkleRootHex /= anchorB.merkleRootHex)
+  assertMsg "kok degisti ama capa digest'i degismedi: capa koke bagli degil"
+    (anchorA.anchorDigest /= anchorB.anchorDigest)
+
+-- | SINIR, ACIKCA: kontrat @prevAnchorDigest@'i DOGRULAMAZ.
+--
+-- Uydurma bir ebeveynle capalamak KABUL EDILIR. Bu bir kusur degil, bir
+-- takas: dogrulamak icin capanin kendi gecmisini fetch etmesi gerekirdi ve
+-- o zaman kacirilan tek bir gun zinciri kalici olarak durdururdu. Kanit,
+-- kuyrugu tazelemeden gecmisi degistirememektir — ki yukaridaki iki test
+-- onu olcuyor. Bu testin isi, sinirin ne oldugunu YAZILI birakmaktir.
+chainIsEvidenceNotEnforcement : Script ()
+chainIsEvidenceNotEnforcement = do
+  p <- allocParties
+  venueCid <- mkVenueWithRoster p ModeLive testPolicy
+  _ <- anchorAt p venueCid "gun-1" (map (mkRow p.player) [1]) ""
+  -- var olmayan bir ebeveyne baglanmak reddedilmez
+  a <- anchorAt p venueCid "gun-2" (map (mkRow p.player) [2]) (textDigest "hic-var-olmadi")
+  Some anchor <- queryContractId p.operator a
+  anchor.prevAnchorDigest === textDigest "hic-var-olmadi"
