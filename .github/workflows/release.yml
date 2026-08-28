@@ -60,6 +60,29 @@ jobs:
           # istemci, ledger'in reddedecegi bir digest uretmeye baslar.
           [ "$PKG" = "$DAML" ] || { echo "js ve daml surumleri ayrismis"; exit 1; }
 
+      # KIMLIK VAR MI — HER SEYDEN ONCE.
+      #
+      # Yoksa `setup-node`'un yazdigi .npmrc `_authToken=` bos kalir ve npm
+      # ENEEDAUTH ile duser — ama BUTUN testler kostuktan SONRA, ve hata
+      # "makineyi yetkilendirin" diyerek asil sebebi (secret gelmiyor)
+      # gizler. Ilk seferinde kaybedilen sey buydu.
+      #
+      # Sik karisan nokta: GitHub'da Variables ve Secrets AYRI depolardir.
+      # `NPM_TOKEN` Variables sekmesine eklenirse `secrets.NPM_TOKEN` BOS
+      # doner ve hicbir uyari cikmaz.
+      - name: Yayin kimligi ayarli mi
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NPM_TOKEN}" ]; then
+            echo "::error::NPM_TOKEN secret'i bos."
+            echo "Settings > Secrets and variables > Actions > SECRETS sekmesi"
+            echo "(Variables sekmesi degil — orada tutulan deger secrets.* ile okunmaz)"
+            echo "Repository secret olmali; Environment secret bu workflow'dan gorunmez."
+            exit 1
+          fi
+          echo "kimlik mevcut"
+
       # Yayinlanan sey test edilmemis olmasin.
       - name: Testler
         run: cd js && npm test
