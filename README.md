@@ -95,7 +95,7 @@ particular host layout is required.
 
     daml build                    # from the repo root, produces the DAR
     cd test-package && daml test  # 62 tests
-    cd js && npm test             # 64 tests
+    cd js && npm test             # 71 tests
 
 The build is reproducible: a clone at any path produces a DAR whose main
 package id is exactly
