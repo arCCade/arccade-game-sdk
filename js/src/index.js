@@ -84,6 +84,7 @@ export {
   assertValidCycleId,
   buildAbortCommands,
   buildCommitCommands,
+  buildDryRunCommitCommands,
   buildExpireCommands,
   buildSettleCommands,
   custodyTagFor,

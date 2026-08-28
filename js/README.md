@@ -21,12 +21,16 @@ means everything that has to produce the same bytes the ledger will produce:
   proofs, and rebuilding report rows from the ledger's transaction tree;
 - helpers for cycle ids, custody tags, tenant keys and asset instrument ids.
 
-**Version 1.5.0 of this package tracks version 1.5.0 of the Daml package.** The
-two are released together and their major/minor numbers are kept equal on
-purpose: they encode one agreement, and letting them drift is how a client
-starts computing a digest the ledger will reject. (They did drift once, to
-1.1.0 against a 1.5.0 ledger package, and nothing noticed because the only
-consumer was a local `file:` dependency.)
+**MAJOR.MINOR tracks the Daml package; PATCH does not.** 1.5.x of this client
+talks to 1.5.0 of the contracts. The two encode one agreement, and letting
+them drift is how a client starts computing a digest the ledger will reject —
+that already happened once, at 1.1.0 against a 1.5.0 ledger package, unnoticed
+because the only consumer was a local `file:` dependency.
+
+Patch is free to move on its own so that a client-only change — a packaging
+fix, a helper, better types — does not require a new Daml package and another
+round of on-chain vetting, which is governance-paced. The release workflow
+enforces exactly this.
 
 ## Why a digest has to match exactly
 

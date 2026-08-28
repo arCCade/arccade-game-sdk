@@ -201,6 +201,91 @@ export function buildCommitCommands(opts) {
  * yuzden kilidi arsivleyen `LockedAmulet_UnlockV2`'den ONCE gelmelidir.
  * Tersine cevrilirse settlement "custody kaniti yok" ile reddedilir.
  */
+/**
+ * KURU KOSUM icin commit — TEK komut, kilit yok.
+ *
+ * Bunun ayri bir fonksiyon olmasinin sebebi: `buildCommitCommands` canli
+ * custody icindir ve `inputAmuletCids`, `amuletRulesCid`, `openMiningRoundCid`
+ * ile DSO tarafi ister. Ogrenme rampasi ise kuru kosumdur — CC olmadan,
+ * Scan'den disclosed contract tasimadan, tam bir stake-and-settle dongusu
+ * kosulabilir. Ilk saatte ogrenilmesi gereken sey SDK'nin kendisi olmali,
+ * Splice'in transfer mekanigi degil.
+ *
+ * `ModeDryRun` bir venue kontrat tarafindan zaten kisitlidir: `venueId`
+ * `dryrun-` ile baslamak zorunda, ucret tabani ve azami odul SIFIR olmali.
+ * Yani kuru kosum dongusu gercek bir donguymus gibi RAPORLANAMAZ.
+ *
+ * Custody etiketi burada da hesaplanir ve `terms`e yazilir: settlement onu
+ * dongunun kimligine ve giris commitment'ine karsi dogrular, kilit olmasa
+ * bile. Kuru kosumda atlamak, canliya gecerken ilk kez cikacak bir fark
+ * yaratirdi.
+ */
+export function buildDryRunCommitCommands(opts) {
+  const {
+    sdkPackageId,
+    venue,
+    operator,
+    player,
+    entitlementCid,
+    gameCode,
+    cycleId,
+    entryDigest,
+    stakeAmount,
+    instrumentId,
+    lockExpiresAt,
+    commandId,
+    stakeMeta = {},
+  } = opts
+
+  assertValidCycleId(cycleId)
+  assertHex64(entryDigest)
+  const expiresAt = typeof lockExpiresAt === 'string' ? lockExpiresAt : lockExpiresAt.toISOString()
+  const custodyTag = custodyTagFor(cycleId, entryDigest)
+
+  const commitCmd = {
+    ExerciseCommand: {
+      templateId: tpl(sdkPackageId, 'ArCCade.GameSdk.Cycle', 'PlayerEntitlement'),
+      contractId: entitlementCid,
+      choice: 'Entitlement_Commit',
+      choiceArgument: {
+        gameCode,
+        cycleId,
+        terms: {
+          stakeAmount: String(stakeAmount),
+          // Kuru kosumda ucret SIFIR olmak zorunda: kip disiplini bunu
+          // kontratta zorlar, burada da acikca sifir yaziyoruz ki cagiran
+          // "ucret alabilirim" sanip reddedilmesin.
+          feeAmount: '0.0',
+          feeReceiver: venue,
+          instrumentId,
+          custody: 'TimeLockedHolding',
+          lockHolders: [venue],
+          lockExpiresAt: expiresAt,
+          custodyTag,
+        },
+        entryDigest,
+        stakeMeta: { values: stakeMeta },
+      },
+    },
+  }
+
+  return {
+    custodyTag,
+    cycleId,
+    commands: [commitCmd],
+    actAs: [player, venue, operator],
+    readAs: [player, venue],
+    submission: {
+      commands: {
+        commands: [commitCmd],
+        commandId: commandId ?? `dryrun-commit-${cycleId}`,
+        actAs: [player, venue, operator],
+        readAs: [player, venue],
+      },
+    },
+  }
+}
+
 export function buildSettleCommands(opts) {
   const {
     sdkPackageId,

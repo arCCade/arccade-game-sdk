@@ -78,6 +78,14 @@ One trap worth naming: Daml's `DA.Crypto.Text.sha256` takes a **hex string**,
 not arbitrary text. Passing plain text compiles cleanly and fails at runtime.
 `textDigest` handles this — do not call `sha256` directly.
 
+## Getting started
+
+A full stake-and-settle cycle from a clone, in about fifteen minutes and with
+no Canton Coin: [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md). The
+runnable version is [`examples/first-cycle.mjs`](examples/first-cycle.mjs) —
+ninety lines that create a venue, issue a slot, commit, settle, and then
+recompute both digests off-ledger so nothing has to be taken on trust.
+
 ## Building
 
 A clone is enough. Every dependency resolves relative to the repo, and the
