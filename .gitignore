@@ -12,3 +12,10 @@
 node_modules/
 .DS_Store
 *.log
+
+# Derlenmis Python. `tools/cycle_audit_reference.py` referans
+# implementasyonu `digest_reference`'i import ediyor ve bu da bir .pyc
+# uretiyor; bir kez depoya sizdi. Mimariye bagli bir ikili dosya, kaynagin
+# yanindayken kaynak gibi okunur.
+__pycache__/
+*.py[cod]
