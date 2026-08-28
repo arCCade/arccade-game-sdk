@@ -1,7 +1,7 @@
 {
   "name": "@arccade/game-sdk",
   "version": "1.5.0",
-  "description": "Gaming SDK for Canton — a two-write game cycle on the Canton Network: value commitment, settlement, and independently verifiable period anchors",
+  "description": "Gaming SDK for Canton \u2014 a two-write game cycle on the Canton Network: value commitment, settlement, and independently verifiable period anchors",
   "type": "module",
   "main": "src/index.js",
   "types": "index.d.ts",
@@ -9,13 +9,28 @@
     ".": {
       "types": "./index.d.ts",
       "import": "./src/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
-  "files": ["src", "index.d.ts", "README.md", "LICENSE", "NOTICE"],
+  "files": [
+    "src",
+    "index.d.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
   "scripts": {
     "test": "node --test test/"
   },
-  "keywords": ["canton", "splice", "daml", "gaming", "featured-app", "audit", "merkle"],
+  "keywords": [
+    "canton",
+    "splice",
+    "daml",
+    "gaming",
+    "featured-app",
+    "audit",
+    "merkle"
+  ],
   "homepage": "https://sdk.arccade.io/",
   "repository": {
     "type": "git",

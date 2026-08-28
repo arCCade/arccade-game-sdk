@@ -56,9 +56,13 @@ jobs:
           DAML=$(grep '^version:' daml.yaml | awk '{print $2}')
           echo "etiket=$TAG  js=$PKG  daml=$DAML"
           [ "$TAG" = "v$PKG" ] || { echo "etiket ile js surumu farkli"; exit 1; }
-          # JS istemcisi ile Daml paketi tek bir anlasmayi kodluyor; ayrisirsa
-          # istemci, ledger'in reddedecegi bir digest uretmeye baslar.
-          [ "$PKG" = "$DAML" ] || { echo "js ve daml surumleri ayrismis"; exit 1; }
+          # JS istemcisi ile Daml paketi tek bir anlasmayi kodluyor, o yuzden
+          # MAJOR.MINOR esit olmali. PATCH ayrisabilir: yalnizca istemciyi
+          # ilgilendiren bir duzeltme (paketleme, tipler, dokuman) yeni bir
+          # Daml paketi ve yeni bir vetting turu gerektirmemeli — tam esitlik
+          # istemek, kucuk bir JS duzeltmesini governance hizina baglardi.
+          [ "${PKG%.*}" = "${DAML%.*}" ] || {
+            echo "js ($PKG) ve daml ($DAML) major.minor ayrismis"; exit 1; }
 
       # KIMLIK VAR MI — HER SEYDEN ONCE.
       #
