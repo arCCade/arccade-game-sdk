@@ -1,0 +1,14 @@
+Gaming SDK for Canton
+Copyright 2026 arCCade
+
+This product includes software developed by arCCade.
+
+It vendors, unmodified, the CIP-0056 token-standard interface DARs from the
+Splice 0.7.1 release (vendor/splice-0.7.1/), which are licensed under the
+Apache License 2.0 by Digital Asset (Switzerland) GmbH and the Splice
+contributors. Their license is kept alongside them at
+vendor/splice-0.7.1/LICENSE.
+
+They are vendored rather than fetched so that a clone builds with no network
+and no host-specific setup, and so that the bytes a build resolves against are
+the bytes that were vetted on the network.

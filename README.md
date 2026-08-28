@@ -101,6 +101,17 @@ makes the upgrade check meaningful rather than a comparison against a DAR
 nobody can reproduce. `damlc upgrade-check` reports **no errors and no
 warnings** from 1.4.0 to 1.5.0.
 
+Those ids are not just documentation. `test-vectors/package-ids.json` holds
+them machine-readably and CI rebuilds the version in `daml.yaml` from a clean
+checkout and refuses the build if the id differs — so "reproducible" is a
+check that can fail, not a claim. Every release is tagged (`v1.5.0`, …) and
+the upgrade check rebuilds the previous release from its own tag.
+
+## License
+
+Apache-2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). The vendored
+Splice interface DARs keep their own Apache-2.0 licence alongside them.
+
 ## Status
 
 Implemented and tested: the cycle, custody proof, policy enforcement, the
