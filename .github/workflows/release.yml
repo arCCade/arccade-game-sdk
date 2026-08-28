@@ -1,0 +1,75 @@
+# Surum yayini — ETIKETTEN, ELDEN DEGIL.
+#
+# Dizustunden `npm publish` calistirmak, tarball ile depo arasinda HICBIR bag
+# kurmaz: indiren kisi paketin hangi kaynaktan derlendigini bilemez, yalnizca
+# yukleyene guvenir. Bu SDK'nin butun tezi "her seyi kendin dogrulayabilirsin"
+# oldugu icin, istemci kutuphanesinin nereden geldiginin dogrulanamaz olmasi
+# teze aykiri olurdu.
+#
+# `--provenance` npm'e, paketin HANGI COMMIT'ten hangi workflow tarafindan
+# uretildigini imzali olarak soyler ve npm sayfasinda dogrulanabilir bir rozet
+# olarak gorunur.
+#
+# Yan faydasi kucuk degil: yayin jetonu yalnizca bir GitHub secret'i olarak
+# yasar, kimsenin dizustunde ya da bir sunucunun ~/.npmrc'sinde durmaz.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Yayinlanacak etiket (or. v1.5.0)'
+        required: true
+
+permissions:
+  contents: read
+  # provenance imzasi icin gerekli
+  id-token: write
+
+jobs:
+  publish:
+    name: npm publish (provenance ile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # ETIKET ILE PAKET SURUMU AYNI OLMAK ZORUNDA.
+      #
+      # Yoksa v1.6.0 etiketinden 1.5.0 yayinlanabilir ve npm'deki surum
+      # deponun hangi noktasindan geldigini artik kimse soyleyemez —
+      # provenance'in tam olarak cozdugu sorunu geri getirmis oluruz.
+      - name: Etiket paketle uyusuyor mu
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          PKG=$(node -p "require('./js/package.json').version")
+          DAML=$(grep '^version:' daml.yaml | awk '{print $2}')
+          echo "etiket=$TAG  js=$PKG  daml=$DAML"
+          [ "$TAG" = "v$PKG" ] || { echo "etiket ile js surumu farkli"; exit 1; }
+          # JS istemcisi ile Daml paketi tek bir anlasmayi kodluyor; ayrisirsa
+          # istemci, ledger'in reddedecegi bir digest uretmeye baslar.
+          [ "$PKG" = "$DAML" ] || { echo "js ve daml surumleri ayrismis"; exit 1; }
+
+      # Yayinlanan sey test edilmemis olmasin.
+      - name: Testler
+        run: cd js && npm test
+
+      - name: Python paritesi
+        run: |
+          python3 tools/digest_reference.py
+          python3 tools/cycle_audit_reference.py
+
+      - name: Publish
+        run: cd js && npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
