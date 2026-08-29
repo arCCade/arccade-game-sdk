@@ -143,3 +143,43 @@ export {
   parseAsset,
   uniqueInstrument,
 } from './assets.js'
+
+// The half of the audit side this client was missing: the period anchor Daml
+// decides, the venue policy every stake commits to, the settlement arithmetic
+// Cycle.daml enforces, and the ledger-time arithmetic underneath all three.
+// Python and Java shipped these; the client on npm did not, so a published
+// report could not be independently verified in JavaScript at all.
+export {
+  ANCHOR_FIELDS,
+  ANCHOR_SCHEMA,
+  ANCHOR_SCHEMA_VERSION,
+  ANCHOR_TOTAL_FIELDS,
+  anchorDigest,
+  anchorDocument,
+  anchorTotals,
+} from './periodAnchor.js'
+
+export {
+  POLICY_FIELDS,
+  POLICY_SCHEMA,
+  POLICY_SCHEMA_VERSION,
+  policyDigest,
+  policyDocument,
+  validPolicy,
+} from './policy.js'
+
+export {
+  SETTLEMENT_FIELDS,
+  assertSettlementValid,
+  settlementIsValid,
+} from './settlement.js'
+
+// Daml's Int division truncates TOWARD ZERO. JavaScript's `/` is float
+// division and `Math.floor` rounds toward negative infinity; the two differ
+// only on negatives — a clock-skewed or pre-epoch timestamp.
+export {
+  addSeconds,
+  epochSeconds,
+  intDivide,
+  secondsBetween,
+} from './ledgerTime.js'

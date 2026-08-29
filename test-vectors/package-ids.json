@@ -9,5 +9,49 @@
     "1.4.0": "ad08e9ae3090cfbd251324ab9d6f4bec58c672c2716ad7ecc78f2846fe18a02b",
     "1.5.0": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a"
   },
-  "vettedOnTestNet": ["1.0.0", "1.1.0", "1.3.0", "1.4.0", "1.5.0"]
+  "vettedOnTestNet": ["1.0.0", "1.1.0", "1.3.0", "1.4.0", "1.5.0"],
+  "current": "1.5.0",
+
+  "packageNameReference": "#arccade-game-sdk",
+  "packageNameReferenceNote": "How a CLIENT should name our templates when it SUBMITS: '#arccade-game-sdk:ArCCade.GameSdk.Cycle:GameStake'. Canton resolves a package-name reference to the highest vetted version, so it cannot go stale on upgrade, and it is what docs/INTEGRATION.md 2.3 and 7 tell integrators to pass as sdkPackageId. It is NOT what a client READS: the ledger always emits a package-id-qualified templateId in a transaction stream, so reader fixtures must carry a real id from `ids` instead.",
+
+  "external": {
+    "note": "Package ids that are not ours. They are recorded here so that a conformance fixture can name one without a bare literal appearing in generate.mjs, and so that the manifest check has a closed set to test membership against: every package id in package-id position in conformance/manifest.json must be either `packageNameReference` or an id listed in this file. Nothing here is OURS to keep stable — see `stability` on each entry.",
+    "verifiedAgainst": {
+      "participant": "http://json-ledger-api.localhost/v2/packages",
+      "scan": "https://scan.sv-1.test.global.canton.network.sync.global/api/scan/v0/amulet-rules",
+      "darBundle": "/opt/arccade/canton/splice-node-0.7.1/dars",
+      "observedAt": "2026-08-29"
+    },
+    "packages": [
+      {
+        "packageName": "splice-amulet",
+        "version": "0.1.22",
+        "id": "fb10433a48c24f30076a7aee03a3e314b7ab02fe9a22e2069e3af92d2b6ac88a",
+        "stability": "dso-governed, MOVES",
+        "role": "Splice.AmuletRules:AmuletRules, Splice.Amulet:Amulet and Splice.Amulet:LockedAmulet — the custody half of write 1 and write 2.",
+        "resolvedBy": "the templateId prefix of the AmuletRules contract served by Canton Scan. arccade-wallet-sdk-proxy/src/gameCustody.js fetchAmuletRules() reads it that way at runtime and caches it for 60s; it is deliberately not in that service's config, because config would make it a second source of truth against the disclosure blob it must agree with.",
+        "whyNotPinnedByClients": "The DSO votes in new splice-amulet releases and the id changes with every one: 0.1.15, 0.1.16, 0.1.17, 0.1.18, 0.1.19, 0.1.20, 0.1.21 and 0.1.22 are ALL vetted on this participant right now, and the live AmuletRules is on 0.1.22. A client that pins this id keeps working until the next DSO vote and then stops. docs/DESIGN.md 550 records the same fact. The value here is therefore a WITNESS of what was live when the fixture was cut, not a constant: the builder cases treat amuletPackageId as a caller-supplied parameter and assert only that the builder places it in the templateId prefix unmodified.",
+        "evidence": [
+          "on the participant: GET /v2/packages contains it",
+          "live on TestNet: scan /api/scan/v0/amulet-rules returns template_id fb10433a…:Splice.AmuletRules:AmuletRules",
+          "in the vendored bundle: /opt/arccade/canton/splice-node-0.7.1/dars/splice-amulet-0.1.22.dar and splice-amulet-current.dar",
+          "in the real TestNet fixture: test-vectors/cycle-trees.json carries it on Amulet, LockedAmulet, AmuletRules and AmuletEventLog events"
+        ]
+      },
+      {
+        "packageName": "splice-api-token-transfer-events-v2",
+        "version": "1.0.0",
+        "id": "5c1097a9bad0af4bcfe6d3fb0fe55112d3d11f18eae57ddfb14c20836fee226c",
+        "stability": "frozen 1.0.0 interface package",
+        "role": "Splice.Api.Token.TransferEventsV2:EventLog — appears on the real TestNet transactions embedded in the audit-tree group; the SDK never names it, it is only read past.",
+        "resolvedBy": "not resolved by any client; it arrives inside a transaction the reader is handed.",
+        "evidence": [
+          "on the participant: GET /v2/packages contains it",
+          "in the vendored bundle: /opt/arccade/canton/splice-node-0.7.1/dars/splice-api-token-transfer-events-v2-1.0.0.dar, and as a dependency dalf inside splice-amulet-0.1.22.dar",
+          "in the real TestNet fixture: test-vectors/cycle-trees.json"
+        ]
+      }
+    ]
+  }
 }

@@ -1,0 +1,20 @@
+#!/bin/sh
+# Maven Wrapper script
+
+set -e
+
+MAVEN_PROJECTBASEDIR="$(cd "$(dirname "$0")" && pwd)"
+MAVEN_USER_HOME="${MAVEN_USER_HOME:-$HOME/.m2}"
+MAVEN_HOME="$MAVEN_USER_HOME/wrapper/dists/apache-maven-3.9.6"
+
+if [ ! -d "$MAVEN_HOME/bin" ]; then
+    echo "Downloading Maven 3.9.6..."
+    mkdir -p "$MAVEN_HOME"
+    MVN_URL="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.6/apache-maven-3.9.6-bin.tar.gz"
+    curl -sL "$MVN_URL" | tar xz -C "$MAVEN_HOME" --strip-components=1
+fi
+
+export M2_HOME="$MAVEN_HOME"
+export PATH="$MAVEN_HOME/bin:$PATH"
+
+exec mvn "$@"

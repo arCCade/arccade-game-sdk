@@ -1,0 +1,26 @@
+#!/bin/sh
+# The Java conformance runner.
+#
+# The SDK is resolved through the PACKAGED JAR, not through java/src, and not
+# through the wallet backend's target/classes. That is the whole point: a class
+# that does not ship is a class a consumer does not have, and a runner that
+# reaches into a source tree cannot tell the difference.
+#
+#   runners/java/run --manifest ../../manifest.json --out ../../results/java.jsonl
+#
+set -e
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+SDK="$HERE/../../../java"
+JAR="$SDK/target/game-sdk-1.5.1.jar"
+OUT="$HERE/.build"
+
+if [ ! -f "$JAR" ]; then
+    echo "building $JAR" >&2
+    (cd "$SDK" && ./mvnw -o -q -B -DskipTests package)
+fi
+
+mkdir -p "$OUT"
+javac --release 17 -Xlint:all -cp "$JAR" -d "$OUT" "$HERE/Runner.java"
+
+exec java -cp "$JAR:$OUT" Runner "$@"

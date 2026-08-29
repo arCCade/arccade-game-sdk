@@ -1,0 +1,42 @@
+{
+  "fromMicros" : 1787702400000000,
+  "toMicros" : 1787788800000000,
+  "cycleCount" : 2,
+  "rows" : [ {
+    "cycleId" : "tw-d81c95f2",
+    "player" : "arccade-user-67a8f9a7::12205414ad36eb2e0b42dade3117df742f159e005d9580618ed006262d0cc46f44a8",
+    "gameCode" : "trade-wars-v4",
+    "concurrencyIndex" : "0",
+    "entryDigest" : "be0338126d2b2ffcdb7aafccaa212c524794e0154d634085eb45a157c3aea229",
+    "outcomeDigest" : "c15e8353eee411f09b72fc10490ed628e61e33d138c54b4220bc530bee2f1764",
+    "committedUnits" : "300000000000",
+    "feeUnits" : "100000000",
+    "returnedUnits" : "300000000000",
+    "forfeitedUnits" : "0",
+    "payoutUnits" : "0",
+    "disposition" : "returned-in-full",
+    "committedAtMicros" : "1787759864727908",
+    "settledAtMicros" : "1787760495714219",
+    "custodyTag" : "arccade-game-sdk:1:tw-d81c95f2:be0338126d2b2ffcdb7aafccaa212c524794e0154d634085eb45a157c3aea229"
+  }, {
+    "cycleId" : "tw-4a2ed0df",
+    "player" : "arccade-user-67a8f9a7::12205414ad36eb2e0b42dade3117df742f159e005d9580618ed006262d0cc46f44a8",
+    "gameCode" : "trade-wars-v4",
+    "concurrencyIndex" : "0",
+    "entryDigest" : "a9eea6b21a1a5b05c48e4e2991018bf31520fa85163f3509d116083c7184a61e",
+    "outcomeDigest" : "2c8998d07cb047036e2ebffe835657571a747494271ed108d8e2e9f35f980c29",
+    "committedUnits" : "300000000000",
+    "feeUnits" : "100000000",
+    "returnedUnits" : "300000000000",
+    "forfeitedUnits" : "0",
+    "payoutUnits" : "0",
+    "disposition" : "returned-in-full",
+    "committedAtMicros" : "1787763102125306",
+    "settledAtMicros" : "1787763491258920",
+    "custodyTag" : "arccade-game-sdk:1:tw-4a2ed0df:a9eea6b21a1a5b05c48e4e2991018bf31520fa85163f3509d116083c7184a61e"
+  } ],
+  "leaves" : [ "64ee0b9c7c6cd87e020b85f20d1df22efe677937bbf27a0368fc1fc4ad44e69d", "83a3b179156318b974ed8d58a7457086188728aa64148de7415eb451f106a1fb" ],
+  "merkleRoot" : "de7fbed367ddba63a5b4df70f6eb3c41075db1f78f6f9f29593a3bbfc73e8106",
+  "warnings" : [ ],
+  "openStakes" : 0
+}

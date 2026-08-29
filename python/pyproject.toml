@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arccade-game-sdk"
+version = "1.5.1"
+description = "Game-economy primitives for the Canton Network: canonical digests, Merkle audit proofs, cycle/trade/transfer command builders."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "arCCade" }]
+keywords = ["canton", "daml", "splice", "audit", "merkle", "gaming"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security :: Cryptography",
+]
+# STANDARD LIBRARY ONLY, deliberately. This client exists so a third party can
+# verify arCCade's published documents without trusting arCCade; a verifier that
+# drags dependencies into an auditor's environment is a verifier auditors will
+# not run.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/arccade/arccade-game-sdk"
+Source = "https://github.com/arccade/arccade-game-sdk"
+
+[tool.setuptools]
+packages = ["arccade_game_sdk"]
+
+[tool.setuptools.package-data]
+arccade_game_sdk = ["py.typed"]

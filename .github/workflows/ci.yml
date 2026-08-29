@@ -127,3 +127,89 @@ jobs:
         run: python3 tools/digest_reference.py
       - name: Agactan satir kurma paritesi
         run: python3 tools/cycle_audit_reference.py
+
+      # The Python client shipped with no unit suite in CI: 56 tests covering
+      # the refusals and the classes they carry, none of them reachable from a
+      # build. `unittest discover`, not pytest, because the package declares no
+      # dependencies and a test runner is a dependency.
+      - name: Python birim testleri
+        run: python3 -m unittest discover -s python/tests -v
+
+  # --------------------------------------------------------------------------
+  # Everything below gates the conformance suite. Before these jobs, the
+  # milestone's central artifact could not fail a build: `grep -rn conformance
+  # .github/` returned nothing, and neither did the Java module.
+  # --------------------------------------------------------------------------
+
+  java:
+    name: Java — build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 17, matching maven.compiler.release in java/pom.xml. Building on the
+      # floor version is the only way this job proves the artifact a Java 17
+      # consumer is promised actually compiles for them.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # mvnw downloads Maven on first use and resolves from Central. It is NOT
+      # given -o here: the runner script uses -o against a local repository that
+      # a clean checkout does not have, and an offline build in CI would fail
+      # for a reason that has nothing to do with the code.
+      - name: Testler
+        run: cd java && ./mvnw -B test
+
+      - name: Paketleme
+        run: cd java && ./mvnw -B -DskipTests package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: game-sdk-jar
+          path: java/target/*.jar
+
+  conformance:
+    name: Conformance — manifest, three runners, cross-runner parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # First, because it is the sharpest check in the repository and the
+      # cheapest to run: it re-drives all 470 cases through the package entry
+      # point and refuses to agree with the client about anything Daml pinned.
+      # A drifted manifest makes every runner below compare against the wrong
+      # contract, so a failure here should stop the job, not be one finding
+      # among several.
+      - name: Manifest is what the shipped client produces
+        run: node conformance/generate.mjs --check
+
+      # The three runners over one case set, and the .verdicts diff between
+      # them. This is the milestone's headline claim; run-all.sh is where it
+      # becomes a check that can fail. The suite ships RED on purpose, so the
+      # gate is not "everything passed": it is "the per-case verdict triples
+      # reproduce the frozen baseline in run-all.sh". A recorded divergence is
+      # green; an unrecorded one, a moved one and a stale waiver are all red.
+      # See the header of that file for why no waiver is inferred.
+      - name: Three runners, one case set, one parity diff
+        run: bash conformance/run-all.sh
+
+      # Uploaded on failure too: the .jsonl records carry observed values and
+      # raw error text per case, and a red parity diff is unreadable without
+      # them.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-results
+          path: conformance/runners/results/

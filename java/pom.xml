@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.arccade</groupId>
+  <artifactId>game-sdk</artifactId>
+  <version>1.5.1</version>
+  <packaging>jar</packaging>
+
+  <name>arCCade Game SDK (Java)</name>
+  <description>
+    The Java implementation of the arccade-sdk-digest-v1 commitment scheme, the
+    period-anchor Merkle tree, and the audit-row reconstruction that turns a
+    ledger transaction stream into a verifiable period report. Byte-for-byte
+    identical to the Daml, JavaScript and Python implementations in this
+    repository; conformance/manifest.json is the shared contract.
+  </description>
+  <url>https://github.com/arccade/arccade-game-sdk</url>
+
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!--
+      Java 17, not 21. The classes use records, so 17 is the floor; going higher
+      would exclude Java 17 consumers from an artifact that has no reason to
+      need anything newer. The wallet backend this was relocated from builds at
+      21 and keeps working, because a 17 artifact runs on 21.
+    -->
+    <maven.compiler.release>17</maven.compiler.release>
+
+    <junit.version>5.10.5</junit.version>
+
+    <!--
+      Plugin versions are pinned rather than inherited. An SDK whose output is a
+      commitment digest should not have its build change underneath it because a
+      plugin released a new version.
+    -->
+    <maven-clean-plugin.version>3.3.2</maven-clean-plugin.version>
+    <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
+    <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+    <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
+    <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
+  </properties>
+
+  <dependencies>
+    <!--
+      NO RUNTIME DEPENDENCIES, deliberately. See io.arccade.gamesdk.Json for the
+      argument: the only JSON this artifact reads is a ledger transaction tree,
+      through six read-only operations, and making every consumer resolve
+      jackson-databind for that is a worse trade than three hundred auditable
+      lines of parser. If this list ever grows, that decision is being reversed
+      and should be argued for in the same place.
+    -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-clean-plugin</artifactId>
+        <version>${maven-clean-plugin.version}</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>${maven-resources-plugin.version}</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>${maven-compiler-plugin.version}</version>
+        <configuration>
+          <compilerArgs>
+            <arg>-Xlint:all</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${maven-surefire-plugin.version}</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>${maven-jar-plugin.version}</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>

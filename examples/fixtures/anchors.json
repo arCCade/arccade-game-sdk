@@ -1,0 +1,59 @@
+{
+  "note": "VenuePeriodAnchor contracts read verbatim from the arCCade TestNet validator participant with /v2/state/active-contracts. This is the offline stand-in for --ledger: the anchor as the ledger holds it, not a summary of it. reportUri is a field of the CONTRACT and not of the anchor document, so the 2026-08-26 anchor pointing at a local path is not a mismatch \u2014 it is a record of where that report was serialised, and a reason its served bytes drifted from the anchored ones.",
+  "source": "http://json-ledger-api.localhost /v2/state/active-contracts",
+  "capturedAtOffset": 122988,
+  "anchors": [
+    {
+      "contractId": "005e226f82e6c30eff34c3b9ca8d6ccc3483429e75f6eac830796806dcc21b20a3ca12122061984f22254827417a8074402415242ea929b132ebae05391fef8c95fa63f098",
+      "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Audit:VenuePeriodAnchor",
+      "createArgument": {
+        "venue": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+        "operator": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+        "venueId": "tradewars/testnet-arena-v2",
+        "mode": "ModeLive",
+        "periodId": "2026-08-26",
+        "periodStartMicros": "1787702400000000",
+        "periodEndMicros": "1787788800000000",
+        "cycleCount": "2",
+        "committedUnits": "600000000000",
+        "feeUnits": "200000000",
+        "returnedUnits": "600000000000",
+        "forfeitedUnits": "0",
+        "payoutUnits": "0",
+        "qualifyingTxCount": "4",
+        "nonQualifyingTxCount": "1",
+        "merkleRootHex": "de7fbed367ddba63a5b4df70f6eb3c41075db1f78f6f9f29593a3bbfc73e8106",
+        "reportUri": "file:///tmp/claude-0/-opt-arccade/be7178c6-ff1e-43ea-8afb-be43c1950f7f/scratchpad/reports/tradewars_2026-08-26.json",
+        "reportDigest": "e83f509f02b3951286aa4e37c33998ec073ce1f231ac86beaffc2ebb1e07aa46",
+        "prevAnchorDigest": "",
+        "anchorDigest": "caa2d6f54dc9d0be9d165e505757cc760a421c13c75a21a6ac69e194e0470fc6"
+      }
+    },
+    {
+      "contractId": "009354aa2b5f39b8fda3be12df6499799007d6cb629bb2f46a738ec9b95f0a664cca1212202520fe2a5661946815d557faca80e91eb43a5cae7c05c4e07ead9503fc5100b4",
+      "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Audit:VenuePeriodAnchor",
+      "createArgument": {
+        "venue": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+        "operator": "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf",
+        "venueId": "tradewars/testnet-arena-v2",
+        "mode": "ModeLive",
+        "periodId": "2026-08-27",
+        "periodStartMicros": "1787788800000000",
+        "periodEndMicros": "1787875200000000",
+        "cycleCount": "0",
+        "committedUnits": "0",
+        "feeUnits": "0",
+        "returnedUnits": "0",
+        "forfeitedUnits": "0",
+        "payoutUnits": "0",
+        "qualifyingTxCount": "0",
+        "nonQualifyingTxCount": "1",
+        "merkleRootHex": "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0",
+        "reportUri": "https://audit.arccade.io/testnet/tradewars_testnet-arena-v2_2026-08-27.json",
+        "reportDigest": "b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb",
+        "prevAnchorDigest": "caa2d6f54dc9d0be9d165e505757cc760a421c13c75a21a6ac69e194e0470fc6",
+        "anchorDigest": "f3e0805b9c3b9b9147f8b7b866ddd34d157d5d1e1e60b5942e14335909a6bd2a"
+      }
+    }
+  ]
+}

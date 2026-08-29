@@ -38,10 +38,29 @@ live contract to be re-created under it.
       Games/                  worked examples, not part of the core surface
 
     js/                       @arccade/game-sdk — command builders, digests, tenancy
+    python/                   arccade-game-sdk — the same surface, standard library only
+    java/                     io.arccade:game-sdk — digest, Merkle, audit reconstruction
+    conformance/              one manifest, three runners: what "they agree" may mean
     test-package/             the Daml test suite (a separate package by necessity)
-    tools/digest_reference.py an independent Python implementation of the digest
+    test-vectors/             the fixtures every implementation is pinned to
+    tools/                    CI entry points: golden vectors, and the package-id check
+    examples/first-cycle.mjs  a whole cycle in ninety lines, no Canton Coin
     vendor/splice-0.7.1/      the CIP-0056 interface DARs this package builds against
-    docs/                     the integration guide published at sdk.arccade.io
+    docs/                     GETTING-STARTED, INTEGRATION, DESIGN; published at sdk.arccade.io
+
+Each client and the conformance suite carry their own README. From a clean
+clone these are the doors, and nothing below assumes you found them by
+searching the tree:
+
+| | |
+|---|---|
+| [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | a full stake-and-settle cycle from a clone, with no Canton Coin |
+| [`docs/INTEGRATION.md`](docs/INTEGRATION.md) | running a real game against real value: live custody, every way a cycle ends, third-party audit, and the traps |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | the reasoning, with an implementation-status table at the top |
+| [`js/README.md`](js/README.md) | `@arccade/game-sdk` — the JavaScript client's own surface |
+| [`python/README.md`](python/README.md) | `arccade-game-sdk` — the Python client, standard library only |
+| [`java/README.md`](java/README.md) | `io.arccade:game-sdk` — the Java client, no runtime dependencies |
+| [`conformance/README.md`](conformance/README.md) | the cross-language case manifest, its three runners, and where each client is red today |
 
 ## The two-write cycle
 
@@ -61,12 +80,35 @@ digests let anyone check that the result matches what was committed to.
 
 ## Digest parity
 
-The commitment digest is implemented four times: Daml (`Digest.daml`),
-JavaScript (`js/src/digest.js`), Python (`tools/digest_reference.py`) and Java
-(`ArccadeDigest.java`, currently living in the wallet backend). They must agree
-byte for byte; `test-package` asserts the golden vectors, and the Python
-implementation exists so the parity check has an independent third opinion
-rather than two ports of one author's reasoning.
+The commitment digest is implemented four times, and all four ship in this
+repository:
+
+    Daml         daml/ArCCade/GameSdk/Digest.daml
+    JavaScript   js/src/digest.js
+    Python       python/arccade_game_sdk/digest.py
+    Java         java/src/main/java/io/arccade/gamesdk/ArccadeDigest.java
+
+They must agree byte for byte. Two things this README claimed and should not:
+
+**`tools/digest_reference.py` is not an implementation.** The Python code moved
+into the installable package under `python/`; the file in `tools/` is now the CI
+entry point that runs the golden vectors against that package, plus a
+compatibility shim for anything still importing `tools.digest_reference`.
+Running it checks Python against constants Daml produced — it is not two Python
+implementations checking each other, and the README should not be read as saying
+it is.
+
+**The Java digest is no longer in the wallet backend.** It is `java/`, an
+Apache-2.0 Maven module with no runtime dependencies, alongside the Merkle tree
+and the audit-row reconstruction.
+
+That leaves parity resting on checks rather than on provenance, which is the
+right way round. `test-package` asserts the golden vectors in Daml;
+`tools/digest_reference.py` and `tools/cycle_audit_reference.py` assert the same
+constants from Python in CI; and `conformance/` drives all three shipped clients
+through one manifest in which **Daml, not the JavaScript client, is the source of
+truth** wherever `VectorsTest.daml` carries a literal. That suite is red today,
+on purpose — `conformance/README.md` says where and why.
 
 The scheme id `arccade-sdk-digest-v1/sha256` is a wire constant and does not
 follow the product name. A commitment already written to the ledger is bound to
@@ -93,9 +135,30 @@ CIP-0056 interface DARs are vendored under `vendor/splice-0.7.1/` (Apache-2.0,
 copied verbatim from the Splice 0.7.1 release), so no Splice installation and no
 particular host layout is required.
 
-    daml build                    # from the repo root, produces the DAR
-    cd test-package && daml test  # 62 tests
-    cd js && npm test             # 71 tests
+    daml build                                     # from the root, produces the DAR
+    cd test-package && daml test                   # 80 tests
+    cd js && npm test                              # 71 tests
+    python3 -m unittest discover -s python/tests   # 56 tests
+    cd java && ./mvnw test                         # 35 tests
+
+Those four suites test one language each. The checks that can catch a language
+drifting from the others are separate, and are the ones worth running before
+believing any of the parity claims above:
+
+    python3 tools/digest_reference.py         # Python against the Daml golden vectors
+    python3 tools/cycle_audit_reference.py    # rows rebuilt from the TestNet fixture
+    python3 tools/check_package_id.py         # built DAR id against test-vectors/
+    node    conformance/runners/run.mjs  --profiles merkle
+    python3 conformance/runners/run.py   --profiles merkle
+    conformance/runners/java/run --manifest conformance/manifest.json \
+        --out conformance/runners/results/java.jsonl --profiles merkle
+
+`merkle` is the one profile all three clients currently pass, so it is the one
+that exits 0. Ask for any other profile and at least one client goes red; that
+is the point of the suite and not a broken checkout. `conformance/README.md`
+has the full per-profile table. CI today runs the Daml, JavaScript and
+`tools/` checks; the Python unit tests, the Java build and the conformance
+runners are not wired into `.github/workflows/ci.yml` yet.
 
 The build is reproducible: a clone at any path produces a DAR whose main
 package id is exactly
@@ -162,9 +225,10 @@ lets two different cycle sets produce the same root (CVE-2012-2459).
 
 The auditor's entry point is `periodRowVerify`, not raw `merkleVerify`: it
 derives the leaf from the row itself, which is what binds "this is a cycle"
-to the row schema. Verification is implemented in Daml, JavaScript and
-Python, locked together by golden vectors — an auditor checks a proof in the
-language they already have, not in Daml.
+to the row schema. Verification is implemented in Daml, JavaScript, Python
+and Java, locked together by golden vectors and by the `audit` profile of
+the conformance manifest — an auditor checks a proof in the language they
+already have, not in Daml.
 
 The gap this README used to name here is closed. Through 1.3.0 the venue's
 `concurrencyLimit` was **not enforced by the contract**:

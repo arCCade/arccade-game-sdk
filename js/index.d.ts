@@ -231,3 +231,130 @@ export namespace games {
   function pixelRaceOutcomeDigest(o: PixelRaceOutcome): string
   function seedMatchesCommit(seed: string, commitment: string): boolean
 }
+
+// --------------------------------------------------------- period anchor
+
+/** Integer 1e-10 unit or microsecond count. Prefer bigint past 2^53. */
+export type Int64Like = bigint | number | string
+
+export const ANCHOR_SCHEMA: string
+export const ANCHOR_SCHEMA_VERSION: number
+export const ANCHOR_FIELDS: readonly string[]
+export const ANCHOR_TOTAL_FIELDS: readonly string[]
+
+export interface PeriodAnchor {
+  venueId: string
+  periodId: string
+  periodStartMicros: Int64Like
+  periodEndMicros: Int64Like
+  /** PROVEN by Daml: recomputed from the rows, so the venue cannot lie. */
+  cycleCount: Int64Like
+  committedUnits: Int64Like
+  feeUnits: Int64Like
+  returnedUnits: Int64Like
+  forfeitedUnits: Int64Like
+  payoutUnits: Int64Like
+  /** DECLARED: arrives as an argument; the contract cannot check it. */
+  qualifyingTxCount: Int64Like
+  nonQualifyingTxCount: Int64Like
+  merkleRootHex: string
+  reportDigest: string
+  /** Empty text at the start of a chain — never absent. */
+  prevAnchorDigest: string
+}
+
+export interface AnchorTotals {
+  cycleCount: bigint
+  committedUnits: bigint
+  feeUnits: bigint
+  returnedUnits: bigint
+  forfeitedUnits: bigint
+  payoutUnits: bigint
+}
+
+export interface CycleAuditRow {
+  cycleId: string
+  player: string
+  gameCode: string
+  concurrencyIndex: Int64Like
+  entryDigest: string
+  outcomeDigest: string
+  committedUnits: Int64Like
+  feeUnits: Int64Like
+  returnedUnits: Int64Like
+  forfeitedUnits: Int64Like
+  payoutUnits: Int64Like
+  disposition: string
+  committedAtMicros: Int64Like
+  settledAtMicros: Int64Like
+  custodyTag: string
+}
+
+export function anchorDocument(anchor: PeriodAnchor): string
+export function anchorDigest(anchor: PeriodAnchor): string
+/** Totals summed from the rows; a repeated cycleId throws. */
+export function anchorTotals(rows: Iterable<CycleAuditRow>): AnchorTotals
+
+// ----------------------------------------------------------------- policy
+
+export const POLICY_SCHEMA: string
+export const POLICY_SCHEMA_VERSION: number
+export const POLICY_FIELDS: readonly string[]
+
+/**
+ * A venue policy. Amounts are DECIMALS (`"1.0"`), unlike an audit row's
+ * already-converted units. Fields may be spelled `min-stake-amount`,
+ * `min_stake_amount` or `minStakeAmount`.
+ */
+export interface VenuePolicy {
+  minStakeAmount: Amount
+  maxStakeAmount: Amount
+  minPlatformFee: Amount
+  maxPayoutAmount: Amount
+  minLockSeconds: Int64Like
+  maxLockSeconds: Int64Like
+  minCycleSeconds: Int64Like
+  maxCycleSeconds: Int64Like
+  cooldownSeconds: Int64Like
+  abortCooldownSeconds: Int64Like
+  concurrencyLimit: Int64Like
+  requireCustodyProof: boolean
+}
+
+export type VenuePolicyLike = VenuePolicy | Record<string, unknown>
+
+export function policyDocument(policy: VenuePolicyLike): string
+export function policyDigest(policy: VenuePolicyLike): string
+/** Daml's `ensure`: an inconsistent policy cannot create a venue at all. */
+export function validPolicy(policy: VenuePolicyLike): boolean
+
+// ------------------------------------------------------------- settlement
+
+export const SETTLEMENT_FIELDS: readonly string[]
+
+/** Amounts in integer 1e-10 units, as in an audit row. */
+export interface Settlement {
+  disposition: string
+  stakeUnits: Int64Like
+  returnedUnits: Int64Like
+  forfeitedUnits: Int64Like
+  payoutUnits: Int64Like
+  /** The venue policy's cap; without it no payout is checkable. */
+  maxPayoutUnits: Int64Like
+}
+
+/** Returns true, or throws naming the Cycle.daml rule that failed. */
+export function assertSettlementValid(settlement: Settlement): boolean
+export function settlementIsValid(settlement: Settlement): boolean
+
+// ------------------------------------------------------------ ledger time
+
+/**
+ * Truncates TOWARD ZERO, as Daml's `/` on `Int` does: `intDivide(-7n, 2n)` is
+ * `-3n`. `Math.floor` would give -4n.
+ */
+export function intDivide(a: Int64Like, b: Int64Like): bigint
+export function epochSeconds(micros: Int64Like): bigint
+/** Each endpoint is truncated to whole seconds BEFORE subtracting. */
+export function secondsBetween(aMicros: Int64Like, bMicros: Int64Like): bigint
+export function addSeconds(micros: Int64Like, seconds: Int64Like): bigint

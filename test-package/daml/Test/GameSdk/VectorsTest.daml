@@ -13,13 +13,16 @@ module Test.GameSdk.VectorsTest where
 import DA.Assert ((===))
 import DA.List ((!!))
 import DA.Optional (fromSome)
-import DA.Date (date, Month(Jan))
-import DA.Time (time)
+import DA.Text qualified as T
+import DA.Date (date, Month(..))
+import DA.Time (time, addRelTime, microseconds)
 import Daml.Script
 
 import ArCCade.GameSdk.Audit
 import ArCCade.GameSdk.Digest
-import ArCCade.GameSdk.Types (Disposition(..))
+import ArCCade.GameSdk.Policy (policyDocument, validPolicy)
+import ArCCade.GameSdk.Time (epoch, epochMicros, epochSeconds, secondsBetween, addSeconds)
+import ArCCade.GameSdk.Types (Disposition(..), VenuePolicy(..), custodyTagFor, custodyTagPrefix, dispositionTag, dryRunVenuePrefix, digestAlgId)
 import ArCCade.GameSdk.Games.PixelRace qualified as PR
 import ArCCade.GameSdk.Games.TradeWars qualified as TW
 
@@ -152,3 +155,905 @@ goldenAuditRow = CycleAuditRow with
 auditRowVector : Script ()
 auditRowVector = script do
   periodLeaf goldenAuditRow === "01e89a905ec52a23012354b602cdf583a7bc6dd92d9c36a19aa0346a1cf26237"
+
+-- ---------------------------------------------------------------------------
+-- Helpers used by the normative vector table below.
+-- ---------------------------------------------------------------------------
+
+-- | A ledger time given as epoch microseconds, which is how the conformance
+-- manifest carries every timestamp.
+atMicros : Int -> Time
+atMicros m = addRelTime epoch (microseconds m)
+
+-- | The leaf corpus the conformance manifest uses: sha256 of "leaf-<n>".
+leafN : Int -> Text
+leafN n = textDigest ("leaf-" <> show n)
+
+-- | A Merkle level rendered as one text so it can be pinned as a literal.
+showLevel : [Text] -> Text
+showLevel = T.intercalate "|"
+
+-- | An inclusion proof rendered as one text: "L:" when the sibling sits on the
+-- left of the accumulator, "R:" when it sits on the right. An empty proof is
+-- the empty text, which is what a promoted leaf has at that level.
+showSteps : [MerkleStep] -> Text
+showSteps ss =
+  T.intercalate "|" (map (\s -> (if s.siblingOnLeft then "L:" else "R:") <> s.sibling) ss)
+
+-- ===========================================================================
+-- NORMATIVE VECTOR TABLE
+-- ===========================================================================
+--
+-- Every entry below is a value DAML COMPUTES compared against a literal frozen
+-- in this file. Two separate consumers depend on it:
+--
+--   1. `daml test` fails if the Daml side ever stops producing the literal, so
+--      the encoding cannot drift without a red build.
+--   2. `conformance/generate.mjs` PARSES these literals out of this source file
+--      and uses them as the expected value of the matching conformance case.
+--      Where a vector exists and the JavaScript client disagrees, the generator
+--      refuses to write manifest.json and names the case. Before this table the
+--      generator recorded whatever the client returned, so a broken client
+--      rewrote its own baseline and scored 100%.
+--
+-- THE ANNOTATION COMMENT ABOVE EACH ASSERTION IS LOAD BEARING. Its key is the
+-- case id the literal anchors; `<case-id>.text` anchors the canonical text of a
+-- case whose expectation is a whole document, and an `input.*` key anchors an
+-- INPUT the manifest feeds to the client rather than an expectation. The
+-- generator fails if a key names no case, if a case's capability is not in its
+-- reviewed symbol table, or if the assertion does not mention the function the
+-- capability claims to be about.
+--
+-- The literals were obtained by running Daml and then cross-checked against a
+-- plain sha256 of the canonical document text -- the same check a third party
+-- makes with `sha256sum` and no Daml, no SDK and no library at all.
+--
+-- Non-ASCII is written with decimal escapes so this file stays reviewable as
+-- ASCII and nothing depends on an editor's normalisation.
+
+-- | canonText and the code-point length every other encoder is built on.
+-- The astral, combining and ZWJ rows are the ones a UTF-16 length passes
+-- ASCII on and fails here.
+vectorsCanonText : Script ()
+vectorsCanonText = script do
+  -- @vector canon-text-ascii
+  canonText "abc" === "t:3:abc"
+  -- @vector code-point-length-ascii
+  T.length "abc" === 3
+  -- @vector canon-text-empty
+  canonText "" === "t:0:"
+  -- @vector code-point-length-empty
+  T.length "" === 0
+  -- @vector canon-text-colon
+  canonText "a:b" === "t:3:a:b"
+  -- @vector code-point-length-colon
+  T.length "a:b" === 3
+  -- @vector canon-text-pipe
+  canonText "a|b" === "t:3:a|b"
+  -- @vector code-point-length-pipe
+  T.length "a|b" === 3
+  -- @vector canon-text-newline
+  canonText "a\nb" === "t:3:a\nb"
+  -- @vector code-point-length-newline
+  T.length "a\nb" === 3
+  -- @vector canon-text-nul
+  canonText "a\0b" === "t:3:a\0b"
+  -- @vector code-point-length-nul
+  T.length "a\0b" === 3
+  -- @vector canon-text-semicolon-equals
+  canonText "a;b=c" === "t:5:a;b=c"
+  -- @vector code-point-length-semicolon-equals
+  T.length "a;b=c" === 5
+  -- @vector canon-text-astral
+  canonText "\127918" === "t:1:\127918"
+  -- @vector code-point-length-astral
+  T.length "\127918" === 1
+  -- @vector canon-text-astral-mixed
+  canonText "a\127918b" === "t:3:a\127918b"
+  -- @vector code-point-length-astral-mixed
+  T.length "a\127918b" === 3
+  -- @vector canon-text-combining
+  canonText "e\769" === "t:2:e\769"
+  -- @vector code-point-length-combining
+  T.length "e\769" === 2
+  -- @vector canon-text-precomposed
+  canonText "\233" === "t:1:\233"
+  -- @vector code-point-length-precomposed
+  T.length "\233" === 1
+  -- @vector canon-text-zwj-family
+  canonText "\128104\8205\128105\8205\128103\8205\128102"
+    === "t:7:\128104\8205\128105\8205\128103\8205\128102"
+  -- @vector code-point-length-zwj-family
+  T.length "\128104\8205\128105\8205\128103\8205\128102" === 7
+  -- @vector canon-text-cjk
+  canonText "\26085\26412\35486" === "t:3:\26085\26412\35486"
+  -- @vector code-point-length-cjk
+  T.length "\26085\26412\35486" === 3
+  -- @vector canon-text-latin1
+  canonText "\252" === "t:1:\252"
+  -- @vector code-point-length-latin1
+  T.length "\252" === 1
+  -- @vector canon-text-musical
+  canonText "\119070" === "t:1:\119070"
+  -- @vector code-point-length-musical
+  T.length "\119070" === 1
+  -- @vector canon-text-replacement
+  canonText "\65533" === "t:1:\65533"
+  -- @vector code-point-length-replacement
+  T.length "\65533" === 1
+
+-- | The remaining scalar encoders: canon itself, canonInt, canonBool,
+-- canonTime and canonParty.
+vectorsScalars : Script ()
+vectorsScalars = script do
+  -- @vector canon-tag-and-length-shape
+  canon "t" "abc" === "t:3:abc"
+  -- @vector canon-unknown-tag-is-still-encoded
+  canon "z" "abc" === "z:3:abc"
+  -- @vector canon-int-zero
+  canonInt 0 === "i:1:0"
+  -- @vector canon-int-one
+  canonInt 1 === "i:1:1"
+  -- @vector canon-int-negative-one
+  canonInt (-1) === "i:2:-1"
+  -- @vector canon-int-forty-two
+  canonInt 42 === "i:2:42"
+  -- @vector canon-int-int64-max
+  canonInt 9223372036854775807 === "i:19:9223372036854775807"
+  -- @vector canon-int-int64-min
+  canonInt (-9223372036854775807 - 1) === "i:20:-9223372036854775808"
+  -- @vector canon-int-ten-digits
+  canonInt 1234567890 === "i:10:1234567890"
+  -- @vector canon-int-micros-width
+  canonInt 1787437747372202 === "i:16:1787437747372202"
+  -- @vector canon-bool-true
+  canonBool True === "b:4:true"
+  -- @vector canon-bool-false
+  canonBool False === "b:5:false"
+  -- @vector canon-time-micros-epoch
+  canonTime (time (date 1970 Jan 1) 0 0 0) === "m:1:0"
+  -- @vector canon-time-micros-one-second
+  canonTime (time (date 1970 Jan 1) 0 0 1) === "m:7:1000000"
+  -- @vector canon-time-micros-negative
+  canonTime (addRelTime (time (date 1970 Jan 1) 0 0 0) (microseconds (-500000))) === "m:7:-500000"
+  -- @vector canon-time-micros-pre-epoch-second
+  canonTime (time (date 1969 Dec 31) 23 59 59) === "m:8:-1000000"
+  -- @vector canon-time-micros-int64-max
+  canon "m" (show 9223372036854775807) === "m:19:9223372036854775807"
+  -- @vector canon-time-micros-int64-min
+  canon "m" (show (-9223372036854775807 - 1)) === "m:20:-9223372036854775808"
+  -- @vector canon-time-micros-testnet-commit
+  canonTime (addRelTime (time (date 1970 Jan 1) 0 0 0) (microseconds 1787437747372202))
+    === "m:16:1787437747372202"
+  -- @vector canon-party-full-fingerprint
+  canonParty (fromSome (partyFromText "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"))
+    === "p:89:arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf"
+  -- @vector canon-party-plain-text-party
+  canonParty (fromSome (partyFromText "auditor-golden-party")) === "p:20:auditor-golden-party"
+
+-- | canonOptional, canonList and canonFields. The field sort is by ASCII code
+-- point, so an uppercase name sorts BEFORE a lowercase one, and a
+-- locale-aware comparator disagrees.
+vectorsComposites : Script ()
+vectorsComposites = script do
+  -- @vector canon-optional-none
+  canonOptional canonText None === "o:0:"
+  -- @vector canon-optional-some
+  canonOptional canonText (Some "x") === "o:5:t:1:x"
+  -- @vector canon-optional-some-empty-inner
+  canonOptional canonText (Some "") === "o:4:t:0:"
+  -- @vector canon-list-empty
+  canonList [] === "l:2:0:"
+  -- @vector canon-list-one-element
+  canonList ["a"] === "l:3:1:a"
+  -- @vector canon-list-two-elements
+  canonList ["a", "b"] === "l:5:2:a|b"
+  -- @vector canon-list-two-elements-a-b
+  canonList ["a", "b"] === "l:5:2:a|b"
+  -- @vector canon-list-element-containing-pipe
+  canonList ["a|b"] === "l:5:1:a|b"
+  -- @vector canon-list-order-sensitive
+  canonList ["b", "a"] === "l:5:2:b|a"
+  -- @vector canon-list-of-canonical-scalars
+  canonList [canonText "a", canonInt 1] === "l:13:2:t:1:a|i:1:1"
+  -- @vector canon-list-of-nested-records
+  canonList [canonFields [("a", canonInt 1)], canonFields [("a", canonInt 2)]]
+    === "l:37:2:r:12:k:1:a=i:1:1;|r:12:k:1:a=i:1:2;"
+  -- @vector canon-fields-empty
+  canonFields [] === "r:0:"
+  -- @vector canon-fields-sorted-by-name
+  canonFields [("b", "2"), ("a", "1")] === "r:16:k:1:a=1;k:1:b=2;"
+  -- @vector canon-fields-insertion-order-already-sorted
+  canonFields [("a", "1"), ("b", "2")] === "r:16:k:1:a=1;k:1:b=2;"
+  -- @vector canon-fields-uppercase-sorts-before-lowercase
+  canonFields [("a", "1"), ("A", "2")] === "r:16:k:1:A=2;k:1:a=1;"
+  -- @vector canon-fields-duplicate-name-kept-in-order
+  canonFields [("a", "1"), ("a", "2")] === "r:16:k:1:a=1;k:1:a=2;"
+  -- @vector canon-fields-value-containing-semicolon
+  canonFields [("a", canonText "x;y")] === "r:14:k:1:a=t:3:x;y;"
+  -- @vector canon-fields-value-containing-equals
+  canonFields [("a", canonText "x=y")] === "r:14:k:1:a=t:3:x=y;"
+  -- @vector canon-fields-trailing-semicolon-on-last-field
+  canonFields [("only", canonText "v")] === "r:15:k:4:only=t:1:v;"
+  -- @vector canon-fields-name-length-in-code-points
+  canonFields [("non-qualifying-tx-count", canonInt 1)]
+    === "r:35:k:23:non-qualifying-tx-count=i:1:1;"
+  -- @vector field-name-accepts-digits-and-hyphen
+  canonFields [("a-b-9", "1")] === "r:12:k:5:a-b-9=1;"
+
+-- | Amounts as integer 1e-10 units, including both ends of the representable
+-- band and the negative side.
+vectorsAmounts : Script ()
+vectorsAmounts = script do
+  -- @vector amount-units-one
+  amountUnits 1.0 === 10000000000
+  -- @vector amount-units-twelve-digits
+  amountUnits 12.3456789012 === 123456789012
+  -- @vector amount-units-zero
+  amountUnits 0.0 === 0
+  -- @vector amount-units-smallest-unit
+  amountUnits 0.0000000001 === 1
+  -- @vector amount-units-negative-one-and-a-half
+  amountUnits (-1.5) === (-15000000000)
+  -- @vector amount-units-negative-zero
+  amountUnits (-0.0) === 0
+  -- @vector amount-units-trailing-dot
+  amountUnits 1.0 === 10000000000
+  -- @vector amount-units-padded-zeros
+  amountUnits 1.5 === 15000000000
+  -- @vector amount-units-integer-no-dot
+  amountUnits 100.0 === 1000000000000
+  -- @vector amount-units-band-max
+  amountUnits 922337203.6854775807 === 9223372036854775807
+  -- @vector amount-units-band-min
+  amountUnits (-922337203.6854775808) === (-9223372036854775808)
+  -- @vector amount-units-testnet-stake
+  amountUnits 100.0 === 1000000000000
+  -- @vector amount-units-testnet-fee
+  amountUnits 0.5 === 5000000000
+  -- @vector amount-units-ten-fractional-nonzero
+  amountUnits 0.1234567890 === 1234567890
+  -- @vector amount-integer-number-accepted
+  amountUnits 2.0 === 20000000000
+  -- @vector amount-units-negative-smallest-unit
+  amountUnits (-0.0000000001) === (-1)
+  -- @vector canon-decimal-carries-units-not-digits
+  canonDecimal 1.5 === "d:11:15000000000"
+  -- @vector canon-decimal-zero
+  canonDecimal 0.0 === "d:1:0"
+
+-- | Whole documents: the canonical text AND its digest, so a hashing bug and
+-- an encoding bug cannot be confused for one another.
+vectorsDocuments : Script ()
+vectorsDocuments = script do
+  -- @vector text-digest-arccade
+  textDigest "arccade" === "140f371fce01eea5068da54d3de6bb719d68dc325f494be284ce56a52da44079"
+  -- @vector text-digest-utf8-bytes-not-code-units
+  textDigest "\127918\26085" === "0b8dc9d1d2ac99868a089aa29b075e22f618b9ccf8147f9d8cb2594c0b4060a4"
+  -- @vector pixel-race-seed-matches-commit
+  textDigest "pixel-race-seed-2026-08-24"
+    === "ce6006605728f3c9e1fe06600c4622f9a8d9bf9e6c0f7c70e3b1d0c088f34934"
+  -- @vector canon-document-empty-fields
+  documentDigest "s" 1 [] === "ea6bfe5408980d193ff46ce0488f56a759a01950a61fd97ca657ef59ade5c6ef"
+  -- @vector canon-document-empty-fields.text
+  canonDocument "s" 1 [] === "arccade-sdk-digest-v1|t:1:si:1:1r:0:"
+  -- @vector canon-document-single-pipe-after-prefix
+  documentDigest "sch" 1 [("a", canonList [canonText "x", canonText "y"])]
+    === "b4aad757a05fa786a6325d1701ccab50e5281677bd307d34d1098ca125a27120"
+  -- @vector canon-document-single-pipe-after-prefix.text
+  canonDocument "sch" 1 [("a", canonList [canonText "x", canonText "y"])]
+    === "arccade-sdk-digest-v1|t:3:schi:1:1r:25:k:1:a=l:13:2:t:1:x|t:1:y;"
+  -- @vector canon-document-schema-is-inside-the-document
+  documentDigest "arccade.merkle-empty" 1 []
+    === "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0"
+  -- @vector canon-document-schema-is-inside-the-document.text
+  canonDocument "arccade.merkle-empty" 1 []
+    === "arccade-sdk-digest-v1|t:20:arccade.merkle-emptyi:1:1r:0:"
+  -- @vector document-digest-of-empty-document
+  documentDigest "arccade.merkle-empty" 1 []
+    === "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0"
+  -- @vector document-digest-of-empty-document.text
+  canonDocument "arccade.merkle-empty" 1 []
+    === "arccade-sdk-digest-v1|t:20:arccade.merkle-emptyi:1:1r:0:"
+  -- @vector canon-document-version-is-inside-the-document
+  documentDigest "s" 2 [] === "be95f38aeb1292cc314e10ef6cfa03f5235e5d36628a0f068515d1cb3102e238"
+  -- @vector canon-document-version-is-inside-the-document.text
+  canonDocument "s" 2 [] === "arccade-sdk-digest-v1|t:1:si:1:2r:0:"
+  -- @vector canon-document-fields-sorted-inside-envelope
+  documentDigest "s" 1 [("zeta", canonInt 2), ("alpha", canonInt 1)]
+    === "d065c0afc66c2487be82d23f66f3f74c0db4540dcd33a955be172f119ef8b381"
+  -- @vector canon-document-fields-sorted-inside-envelope.text
+  canonDocument "s" 1 [("zeta", canonInt 2), ("alpha", canonInt 1)]
+    === "arccade-sdk-digest-v1|t:1:si:1:1r:31:k:5:alpha=i:1:1;k:4:zeta=i:1:2;"
+
+-- | The record encodings the two shipped games build their documents from.
+vectorsGameFields : Script ()
+vectorsGameFields = script do
+  -- @vector trade-wars-price-point
+  canonFields [("as-of", canonTime (addRelTime (time (date 1970 Jan 1) 0 0 0) (microseconds 1000000))), ("price", canonDecimal 60000.0), ("source", canonText "binance"), ("symbol", canonText "BTC")]
+    === "r:95:k:5:as-of=m:7:1000000;k:5:price=d:15:600000000000000;k:6:source=t:7:binance;k:6:symbol=t:3:BTC;"
+  -- @vector trade-wars-submillisecond-as-of
+  canonFields [("as-of", canonTime (addRelTime (time (date 1970 Jan 1) 0 0 0) (microseconds 1787605091258920))), ("price", canonDecimal 60000.0), ("source", canonText "binance"), ("symbol", canonText "BTC")]
+    === "r:105:k:5:as-of=m:16:1787605091258920;k:5:price=d:15:600000000000000;k:6:source=t:7:binance;k:6:symbol=t:3:BTC;"
+  -- @vector trade-wars-allocation
+  canonFields [("allocation-percent", canonDecimal 60.0), ("symbol", canonText "BTC")]
+    === "r:61:k:18:allocation-percent=d:12:600000000000;k:6:symbol=t:3:BTC;"
+  -- @vector pixel-race-game-play-record
+  canonFields [("coins-collected", canonInt 17), ("game-number", canonInt 1), ("max-level", canonInt 4), ("score", canonInt 9120), ("survival-seconds", canonInt 83)]
+    === "r:119:k:15:coins-collected=i:2:17;k:11:game-number=i:1:1;k:9:max-level=i:1:4;k:5:score=i:4:9120;k:16:survival-seconds=i:2:83;"
+
+-- | The leaf corpus itself. The manifest feeds these hex strings to the client
+-- as INPUT, so pinning them here is what stops a broken textDigest from
+-- quietly changing the inputs a Merkle expectation was computed over.
+vectorsMerkleLeaves : Script ()
+vectorsMerkleLeaves = script do
+  -- @vector input.leaf-0
+  leafN 0 === "d2dbf006f96dd05044a8f63d8f118f23925ba4cc5750f8b6c8e287fd506c8188"
+  -- @vector input.leaf-1
+  leafN 1 === "4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855"
+  -- @vector input.leaf-2
+  leafN 2 === "649837ddcb7e1967086d7d35aaef7b975c513815d96fc6e70015e93a2bfe0f9a"
+  -- @vector input.leaf-3
+  leafN 3 === "9fde56c376760bd399b82eb8569229a2dff19219411ac71154dfeab2cf502454"
+  -- @vector input.leaf-4
+  leafN 4 === "697f943b9ec5f90eddda8ae7473f5eb688187e3467f312fefa8677dde255042c"
+  -- @vector input.leaf-5
+  leafN 5 === "fb1ec199d052a3ce6d141a28c2d706a51b99f09c2a8d61243062a046f06b68f1"
+  -- @vector input.leaf-6
+  leafN 6 === "add4b896cb06bf0d24fd68948f1e9f7e0084b19f7b37f3fbc0f4b5d0d58ae277"
+  -- @vector input.leaf-7
+  leafN 7 === "3c9bcfc57bee1ac26ef0036b1fe72d119a78f09c42bff115d79fc8c212538581"
+  -- @vector input.leaf-8
+  leafN 8 === "cc71da7c12c4e002e77e476d917422f04a14bfd133bf445a9450a0766fe2022a"
+  -- @vector input.leaf-9
+  leafN 9 === "be5551be309d987e631d9b3bf97df16d4215f54f016b867e0f80cf2ca1d6b5d9"
+
+-- | Empty root, internal nodes, one level of pairing and the root at every
+-- leaf count up to nine. A lone trailing node is PROMOTED, never paired
+-- with itself (CVE-2012-2459), which is why [1,2,3] and [1,2,3,3] differ.
+vectorsMerkleStructure : Script ()
+vectorsMerkleStructure = script do
+  -- @vector merkle-empty-golden
+  merkleEmpty === "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0"
+  -- @vector merkle-node-golden
+  merkleNode (leafN 1) (leafN 2)
+    === "aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720"
+  -- @vector merkle-node-domain-separation
+  merkleNode (leafN 1) (leafN 1)
+    === "08974049c6156a964ff5b074c477d733d2b35d449a5c404a726051545a12dbe7"
+  -- @vector merkle-node-is-order-sensitive
+  merkleNode (leafN 2) (leafN 1)
+    === "46a51741cb2296215146961c69d1ed63d30bb637fb0d752c2962b5c14220d5fe"
+  -- @vector merkle-root-of-no-leaves-is-merkle-empty
+  merkleRoot [] === "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0"
+  -- @vector merkle-root-of-one-leaf-is-the-leaf
+  merkleRoot [leafN 1] === "4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855"
+  -- @vector merkle-root-of-1-leaves
+  merkleRoot [leafN 1] === "4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855"
+  -- @vector merkle-root-of-2-leaves
+  merkleRoot [leafN 1, leafN 2]
+    === "aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720"
+  -- @vector merkle-root-of-3-leaves
+  merkleRoot [leafN 1, leafN 2, leafN 3]
+    === "f31cc766e62a52c3c3156e05d53fde76f54fed6067d283dc9a3d8ada9d0ceedf"
+  -- @vector merkle-root-of-4-leaves
+  merkleRoot [leafN 1, leafN 2, leafN 3, leafN 4]
+    === "c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+  -- @vector merkle-root-of-5-leaves
+  merkleRoot [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5]
+    === "a700c7c958eeefe142b65d2cfec81092c6d60cc0b81ec3cec4a899983175af71"
+  -- @vector merkle-root-of-6-leaves
+  merkleRoot [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6]
+    === "6794052fcefa37833cbcde6ba302aa1d4f13ed4ff4ffbdcb72904a1ff59c81de"
+  -- @vector merkle-root-of-7-leaves
+  merkleRoot [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7]
+    === "e0eb65701ba61826a07419f34500a57e702ed00160ef3705ebe8d3e5feb9054b"
+  -- @vector merkle-root-of-8-leaves
+  merkleRoot [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8]
+    === "40dabc3da9bbb7381b3331455c22c6da9d120704d6e0167cb45186ee82be84f9"
+  -- @vector merkle-root-of-9-leaves
+  merkleRoot [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9]
+    === "327fafe7738bbebe74e453467a5b013e22aae79cdf8d58d19ba995859cacd2d2"
+  -- @vector merkle-root-three-leaves-golden
+  merkleRoot [leafN 1, leafN 2, leafN 3]
+    === "f31cc766e62a52c3c3156e05d53fde76f54fed6067d283dc9a3d8ada9d0ceedf"
+  -- @vector merkle-three-and-four-leaves-differ
+  merkleRoot [leafN 1, leafN 2, leafN 3, leafN 3]
+    === "2b69fdc5bc0b88f8fa6d0516ec3af8736a59caff7131bd90891a05c990feadb6"
+  -- @vector merkle-pair-up-promotes-lone-node
+  showLevel (merklePairUp [leafN 1, leafN 2, leafN 3])
+    === "aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|9fde56c376760bd399b82eb8569229a2dff19219411ac71154dfeab2cf502454"
+  -- @vector merkle-pair-up-even-count
+  showLevel (merklePairUp [leafN 1, leafN 2, leafN 3, leafN 4])
+    === "aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067"
+  -- @vector merkle-pair-up-single-element
+  showLevel (merklePairUp [leafN 1])
+    === "4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855"
+
+-- | Inclusion proofs for trees of one to four leaves.
+vectorsMerkleProofsSmall : Script ()
+vectorsMerkleProofsSmall = script do
+  -- @vector merkle-proof-n1-index-0
+  showSteps (merkleProof 0 [leafN 1]) === ""
+  -- @vector merkle-proof-n2-index-0
+  showSteps (merkleProof 0 [leafN 1, leafN 2])
+    === "R:649837ddcb7e1967086d7d35aaef7b975c513815d96fc6e70015e93a2bfe0f9a"
+  -- @vector merkle-proof-n2-index-1
+  showSteps (merkleProof 1 [leafN 1, leafN 2])
+    === "L:4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855"
+  -- @vector merkle-proof-n3-index-0
+  showSteps (merkleProof 0 [leafN 1, leafN 2, leafN 3])
+    === "R:649837ddcb7e1967086d7d35aaef7b975c513815d96fc6e70015e93a2bfe0f9a|R:9fde56c376760bd399b82eb8569229a2dff19219411ac71154dfeab2cf502454"
+  -- @vector merkle-proof-n3-index-1
+  showSteps (merkleProof 1 [leafN 1, leafN 2, leafN 3])
+    === "L:4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855|R:9fde56c376760bd399b82eb8569229a2dff19219411ac71154dfeab2cf502454"
+  -- @vector merkle-proof-n3-index-2
+  showSteps (merkleProof 2 [leafN 1, leafN 2, leafN 3])
+    === "L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720"
+  -- @vector merkle-proof-n4-index-0
+  showSteps (merkleProof 0 [leafN 1, leafN 2, leafN 3, leafN 4])
+    === "R:649837ddcb7e1967086d7d35aaef7b975c513815d96fc6e70015e93a2bfe0f9a|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067"
+  -- @vector merkle-proof-n4-index-1
+  showSteps (merkleProof 1 [leafN 1, leafN 2, leafN 3, leafN 4])
+    === "L:4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067"
+  -- @vector merkle-proof-n4-index-2
+  showSteps (merkleProof 2 [leafN 1, leafN 2, leafN 3, leafN 4])
+    === "R:697f943b9ec5f90eddda8ae7473f5eb688187e3467f312fefa8677dde255042c|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720"
+  -- @vector merkle-proof-n4-index-3
+  showSteps (merkleProof 3 [leafN 1, leafN 2, leafN 3, leafN 4])
+    === "L:9fde56c376760bd399b82eb8569229a2dff19219411ac71154dfeab2cf502454|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720"
+
+-- | Inclusion proofs for trees of five to seven leaves.
+vectorsMerkleProofsMedium : Script ()
+vectorsMerkleProofsMedium = script do
+  -- @vector merkle-proof-n5-index-0
+  showSteps (merkleProof 0 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5])
+    === "R:649837ddcb7e1967086d7d35aaef7b975c513815d96fc6e70015e93a2bfe0f9a|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067|R:fb1ec199d052a3ce6d141a28c2d706a51b99f09c2a8d61243062a046f06b68f1"
+  -- @vector merkle-proof-n5-index-1
+  showSteps (merkleProof 1 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5])
+    === "L:4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067|R:fb1ec199d052a3ce6d141a28c2d706a51b99f09c2a8d61243062a046f06b68f1"
+  -- @vector merkle-proof-n5-index-2
+  showSteps (merkleProof 2 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5])
+    === "R:697f943b9ec5f90eddda8ae7473f5eb688187e3467f312fefa8677dde255042c|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|R:fb1ec199d052a3ce6d141a28c2d706a51b99f09c2a8d61243062a046f06b68f1"
+  -- @vector merkle-proof-n5-index-3
+  showSteps (merkleProof 3 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5])
+    === "L:9fde56c376760bd399b82eb8569229a2dff19219411ac71154dfeab2cf502454|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|R:fb1ec199d052a3ce6d141a28c2d706a51b99f09c2a8d61243062a046f06b68f1"
+  -- @vector merkle-proof-n5-index-4
+  showSteps (merkleProof 4 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5])
+    === "L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+  -- @vector merkle-proof-n6-index-0
+  showSteps (merkleProof 0 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6])
+    === "R:649837ddcb7e1967086d7d35aaef7b975c513815d96fc6e70015e93a2bfe0f9a|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067|R:c26908dffebc3257046a80b4c3c0460b91b8f660b10c14cbd4a3c88b07b470a4"
+  -- @vector merkle-proof-n6-index-1
+  showSteps (merkleProof 1 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6])
+    === "L:4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067|R:c26908dffebc3257046a80b4c3c0460b91b8f660b10c14cbd4a3c88b07b470a4"
+  -- @vector merkle-proof-n6-index-2
+  showSteps (merkleProof 2 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6])
+    === "R:697f943b9ec5f90eddda8ae7473f5eb688187e3467f312fefa8677dde255042c|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|R:c26908dffebc3257046a80b4c3c0460b91b8f660b10c14cbd4a3c88b07b470a4"
+  -- @vector merkle-proof-n6-index-3
+  showSteps (merkleProof 3 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6])
+    === "L:9fde56c376760bd399b82eb8569229a2dff19219411ac71154dfeab2cf502454|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|R:c26908dffebc3257046a80b4c3c0460b91b8f660b10c14cbd4a3c88b07b470a4"
+  -- @vector merkle-proof-n6-index-4
+  showSteps (merkleProof 4 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6])
+    === "R:add4b896cb06bf0d24fd68948f1e9f7e0084b19f7b37f3fbc0f4b5d0d58ae277|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+  -- @vector merkle-proof-n6-index-5
+  showSteps (merkleProof 5 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6])
+    === "L:fb1ec199d052a3ce6d141a28c2d706a51b99f09c2a8d61243062a046f06b68f1|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+  -- @vector merkle-proof-n7-index-0
+  showSteps (merkleProof 0 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7])
+    === "R:649837ddcb7e1967086d7d35aaef7b975c513815d96fc6e70015e93a2bfe0f9a|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067|R:aaac57239a9b36489b51e53142c93a1209a55b0b9e7c49fb30e0913a29790cf6"
+  -- @vector merkle-proof-n7-index-1
+  showSteps (merkleProof 1 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7])
+    === "L:4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067|R:aaac57239a9b36489b51e53142c93a1209a55b0b9e7c49fb30e0913a29790cf6"
+  -- @vector merkle-proof-n7-index-2
+  showSteps (merkleProof 2 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7])
+    === "R:697f943b9ec5f90eddda8ae7473f5eb688187e3467f312fefa8677dde255042c|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|R:aaac57239a9b36489b51e53142c93a1209a55b0b9e7c49fb30e0913a29790cf6"
+  -- @vector merkle-proof-n7-index-3
+  showSteps (merkleProof 3 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7])
+    === "L:9fde56c376760bd399b82eb8569229a2dff19219411ac71154dfeab2cf502454|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|R:aaac57239a9b36489b51e53142c93a1209a55b0b9e7c49fb30e0913a29790cf6"
+  -- @vector merkle-proof-n7-index-4
+  showSteps (merkleProof 4 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7])
+    === "R:add4b896cb06bf0d24fd68948f1e9f7e0084b19f7b37f3fbc0f4b5d0d58ae277|R:3c9bcfc57bee1ac26ef0036b1fe72d119a78f09c42bff115d79fc8c212538581|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+  -- @vector merkle-proof-n7-index-5
+  showSteps (merkleProof 5 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7])
+    === "L:fb1ec199d052a3ce6d141a28c2d706a51b99f09c2a8d61243062a046f06b68f1|R:3c9bcfc57bee1ac26ef0036b1fe72d119a78f09c42bff115d79fc8c212538581|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+  -- @vector merkle-proof-n7-index-6
+  showSteps (merkleProof 6 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7])
+    === "L:c26908dffebc3257046a80b4c3c0460b91b8f660b10c14cbd4a3c88b07b470a4|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+
+-- | Inclusion proofs for trees of eight and nine leaves.
+vectorsMerkleProofsLarge : Script ()
+vectorsMerkleProofsLarge = script do
+  -- @vector merkle-proof-n8-index-0
+  showSteps (merkleProof 0 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8])
+    === "R:649837ddcb7e1967086d7d35aaef7b975c513815d96fc6e70015e93a2bfe0f9a|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067|R:90b9e6f6a4b4b54f54e58e23782637725ebdf259b9a6e50fe8df8f11f22f189c"
+  -- @vector merkle-proof-n8-index-1
+  showSteps (merkleProof 1 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8])
+    === "L:4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067|R:90b9e6f6a4b4b54f54e58e23782637725ebdf259b9a6e50fe8df8f11f22f189c"
+  -- @vector merkle-proof-n8-index-2
+  showSteps (merkleProof 2 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8])
+    === "R:697f943b9ec5f90eddda8ae7473f5eb688187e3467f312fefa8677dde255042c|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|R:90b9e6f6a4b4b54f54e58e23782637725ebdf259b9a6e50fe8df8f11f22f189c"
+  -- @vector merkle-proof-n8-index-3
+  showSteps (merkleProof 3 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8])
+    === "L:9fde56c376760bd399b82eb8569229a2dff19219411ac71154dfeab2cf502454|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|R:90b9e6f6a4b4b54f54e58e23782637725ebdf259b9a6e50fe8df8f11f22f189c"
+  -- @vector merkle-proof-n8-index-4
+  showSteps (merkleProof 4 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8])
+    === "R:add4b896cb06bf0d24fd68948f1e9f7e0084b19f7b37f3fbc0f4b5d0d58ae277|R:68f86db8678109aeb460cff777c7a441711deb9425cf3858bacb6e815492a33d|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+  -- @vector merkle-proof-n8-index-5
+  showSteps (merkleProof 5 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8])
+    === "L:fb1ec199d052a3ce6d141a28c2d706a51b99f09c2a8d61243062a046f06b68f1|R:68f86db8678109aeb460cff777c7a441711deb9425cf3858bacb6e815492a33d|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+  -- @vector merkle-proof-n8-index-6
+  showSteps (merkleProof 6 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8])
+    === "R:cc71da7c12c4e002e77e476d917422f04a14bfd133bf445a9450a0766fe2022a|L:c26908dffebc3257046a80b4c3c0460b91b8f660b10c14cbd4a3c88b07b470a4|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+  -- @vector merkle-proof-n8-index-7
+  showSteps (merkleProof 7 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8])
+    === "L:3c9bcfc57bee1ac26ef0036b1fe72d119a78f09c42bff115d79fc8c212538581|L:c26908dffebc3257046a80b4c3c0460b91b8f660b10c14cbd4a3c88b07b470a4|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee"
+  -- @vector merkle-proof-n9-index-0
+  showSteps (merkleProof 0 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9])
+    === "R:649837ddcb7e1967086d7d35aaef7b975c513815d96fc6e70015e93a2bfe0f9a|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067|R:90b9e6f6a4b4b54f54e58e23782637725ebdf259b9a6e50fe8df8f11f22f189c|R:be5551be309d987e631d9b3bf97df16d4215f54f016b867e0f80cf2ca1d6b5d9"
+  -- @vector merkle-proof-n9-index-1
+  showSteps (merkleProof 1 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9])
+    === "L:4140bf0e8569ed03ec838871ff2f190e9b3ea86bc083d7e9901049f75f00e855|R:f62ce490e8b5cc141143eaa94c19f3408b5124ae0aa36983b5fc19830f791067|R:90b9e6f6a4b4b54f54e58e23782637725ebdf259b9a6e50fe8df8f11f22f189c|R:be5551be309d987e631d9b3bf97df16d4215f54f016b867e0f80cf2ca1d6b5d9"
+  -- @vector merkle-proof-n9-index-2
+  showSteps (merkleProof 2 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9])
+    === "R:697f943b9ec5f90eddda8ae7473f5eb688187e3467f312fefa8677dde255042c|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|R:90b9e6f6a4b4b54f54e58e23782637725ebdf259b9a6e50fe8df8f11f22f189c|R:be5551be309d987e631d9b3bf97df16d4215f54f016b867e0f80cf2ca1d6b5d9"
+  -- @vector merkle-proof-n9-index-3
+  showSteps (merkleProof 3 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9])
+    === "L:9fde56c376760bd399b82eb8569229a2dff19219411ac71154dfeab2cf502454|L:aa3de7939ca80f5110e8b29ec442d9d770f525dfb63e86ff59e7624ff110e720|R:90b9e6f6a4b4b54f54e58e23782637725ebdf259b9a6e50fe8df8f11f22f189c|R:be5551be309d987e631d9b3bf97df16d4215f54f016b867e0f80cf2ca1d6b5d9"
+  -- @vector merkle-proof-n9-index-4
+  showSteps (merkleProof 4 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9])
+    === "R:add4b896cb06bf0d24fd68948f1e9f7e0084b19f7b37f3fbc0f4b5d0d58ae277|R:68f86db8678109aeb460cff777c7a441711deb9425cf3858bacb6e815492a33d|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee|R:be5551be309d987e631d9b3bf97df16d4215f54f016b867e0f80cf2ca1d6b5d9"
+  -- @vector merkle-proof-n9-index-5
+  showSteps (merkleProof 5 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9])
+    === "L:fb1ec199d052a3ce6d141a28c2d706a51b99f09c2a8d61243062a046f06b68f1|R:68f86db8678109aeb460cff777c7a441711deb9425cf3858bacb6e815492a33d|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee|R:be5551be309d987e631d9b3bf97df16d4215f54f016b867e0f80cf2ca1d6b5d9"
+  -- @vector merkle-proof-n9-index-6
+  showSteps (merkleProof 6 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9])
+    === "R:cc71da7c12c4e002e77e476d917422f04a14bfd133bf445a9450a0766fe2022a|L:c26908dffebc3257046a80b4c3c0460b91b8f660b10c14cbd4a3c88b07b470a4|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee|R:be5551be309d987e631d9b3bf97df16d4215f54f016b867e0f80cf2ca1d6b5d9"
+  -- @vector merkle-proof-n9-index-7
+  showSteps (merkleProof 7 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9])
+    === "L:3c9bcfc57bee1ac26ef0036b1fe72d119a78f09c42bff115d79fc8c212538581|L:c26908dffebc3257046a80b4c3c0460b91b8f660b10c14cbd4a3c88b07b470a4|L:c570912c564e4720dc4d8c502d10e1fbaef4a5c98f29b5d8e93d4370f7486eee|R:be5551be309d987e631d9b3bf97df16d4215f54f016b867e0f80cf2ca1d6b5d9"
+  -- @vector merkle-proof-n9-index-8
+  showSteps (merkleProof 8 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9])
+    === "L:40dabc3da9bbb7381b3331455c22c6da9d120704d6e0167cb45186ee82be84f9"
+
+-- | Folding and verifying a proof, including the three ways a forged proof
+-- has to fail and the single-leaf trap that makes bare merkleVerify
+-- unsafe as an auditor API.
+vectorsMerkleVerification : Script ()
+vectorsMerkleVerification = script do
+  -- @vector merkle-proof-index-out-of-range
+  showSteps (merkleProof 5 [leafN 1, leafN 2]) === ""
+  -- @vector merkle-verify-promoted-leaf-n3-index-2
+  merkleVerify (leafN 3) (merkleProof 2 [leafN 1, leafN 2, leafN 3]) (merkleRoot [leafN 1, leafN 2, leafN 3])
+    === True
+  -- @vector merkle-verify-promoted-leaf-n5-index-4
+  merkleVerify (leafN 5) (merkleProof 4 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5]) (merkleRoot [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5])
+    === True
+  -- @vector merkle-verify-promoted-leaf-n9-index-8
+  merkleVerify (leafN 9) (merkleProof 8 [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9]) (merkleRoot [leafN 1, leafN 2, leafN 3, leafN 4, leafN 5, leafN 6, leafN 7, leafN 8, leafN 9])
+    === True
+  -- @vector merkle-verify-empty-proof-single-leaf-trap
+  merkleVerify (leafN 1) [] (merkleRoot [leafN 1]) === True
+  -- @vector merkle-verify-wrong-leaf-fails
+  merkleVerify (leafN 4) (merkleProof 0 [leafN 1, leafN 2, leafN 3]) (merkleRoot [leafN 1, leafN 2, leafN 3])
+    === False
+  -- @vector merkle-verify-tampered-sibling-fails
+  merkleVerify (leafN 0) (map (\s -> s with sibling = leafN 9) (merkleProof 0 [leafN 1, leafN 2, leafN 3])) (merkleRoot [leafN 1, leafN 2, leafN 3])
+    === False
+  -- @vector merkle-verify-flipped-side-fails
+  merkleVerify (leafN 1) (map (\s -> s with siblingOnLeft = not s.siblingOnLeft) (merkleProof 0 [leafN 1, leafN 2, leafN 3])) (merkleRoot [leafN 1, leafN 2, leafN 3])
+    === False
+  -- @vector merkle-fold-is-separable-from-verify
+  merkleFold (leafN 1) (merkleProof 0 [leafN 1, leafN 2, leafN 3])
+    === "f31cc766e62a52c3c3156e05d53fde76f54fed6067d283dc9a3d8ada9d0ceedf"
+
+-- | The wire constants and the custody tag, which is a plain concatenation
+-- and therefore only injective because the cycleId grammar forbids a colon.
+vectorsConstants : Script ()
+vectorsConstants = script do
+  -- @vector constant-scheme-prefix
+  schemePrefix === "arccade-sdk-digest-v1"
+  -- @vector constant-digest-alg-id
+  digestAlgId === "arccade-sdk-digest-v1/sha256"
+  -- @vector constant-custody-tag-prefix
+  custodyTagPrefix === "arccade-game-sdk:1:"
+  -- @vector custody-tag-prefix-constant
+  custodyTagPrefix === "arccade-game-sdk:1:"
+  -- @vector constant-dry-run-venue-prefix
+  dryRunVenuePrefix === "dryrun-"
+  -- @vector custody-tag-shape
+  custodyTagFor "tw-testnet-1787437747" "5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
+    === "arccade-game-sdk:1:tw-testnet-1787437747:5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
+  -- @vector custody-tag-fixture-row-0
+  custodyTagFor "tw-testnet-1787437747" "5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
+    === "arccade-game-sdk:1:tw-testnet-1787437747:5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
+  -- @vector custody-tag-fixture-row-1
+  custodyTagFor "pr-livetest-20260824" "fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+    === "arccade-game-sdk:1:pr-livetest-20260824:fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+  -- @vector custody-tag-fixture-row-2
+  custodyTagFor "pr-guard-test" "fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+    === "arccade-game-sdk:1:pr-guard-test:fd8d8db1d08ba84d3325137b8adf0c7dc7c894e3bd099b36c9464b618f190d4b"
+
+-- | Ledger time arithmetic. Every division truncates TOWARD ZERO, and
+-- secondsBetween truncates each endpoint independently rather than
+-- dividing the elapsed micros -- 0.9s to 60.0s is 60 seconds apart, not 59.
+vectorsTimeArithmetic : Script ()
+vectorsTimeArithmetic = script do
+  -- @vector int-divide-negative-truncates-toward-zero
+  (-7) / 2 === (-3)
+  -- @vector epoch-seconds-negative-truncates-to-zero
+  epochSeconds (atMicros (-500000)) === 0
+  -- @vector epoch-seconds-exact-second
+  epochSeconds (atMicros 1787437747000000) === 1787437747
+  -- @vector epoch-seconds-drops-fraction
+  epochSeconds (atMicros 1787437747372202) === 1787437747
+  -- @vector seconds-between-truncates-each-endpoint
+  secondsBetween (atMicros 900000) (atMicros 60000000) === 60
+  -- @vector seconds-between-naive-elapsed-would-differ
+  secondsBetween (atMicros 900000) (atMicros 60000000) === 60
+  -- @vector seconds-between-same-second
+  secondsBetween (atMicros 1000001) (atMicros 1999999) === 0
+  -- @vector seconds-between-across-a-second-boundary
+  secondsBetween (atMicros 1999999) (atMicros 2000000) === 1
+  -- @vector seconds-between-negative-interval
+  secondsBetween (atMicros 60000000) (atMicros 900000) === (-60)
+  -- @vector add-seconds-cooldown
+  epochMicros (addSeconds (atMicros 1787437775189712) 30) === 1787437805189712
+  -- @vector add-seconds-zero
+  epochMicros (addSeconds (atMicros 1787437775189712) 0) === 1787437775189712
+  -- @vector add-seconds-negative
+  epochMicros (addSeconds (atMicros 1787437775189712) (-30)) === 1787437745189712
+
+-- | The venue policy document and its consistency rule. No shipped client
+-- implements either, so before this table the conformance expectation came
+-- from a reference written in generate.mjs itself.
+vectorsPolicy : Script ()
+vectorsPolicy = script do
+  -- @vector policy-document-representative
+  textDigest (policyDocument (VenuePolicy with minStakeAmount = 1.0; maxStakeAmount = 1000.0; minPlatformFee = 0.5; maxPayoutAmount = 5000.0; minLockSeconds = 7200; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 3; requireCustodyProof = True))
+    === "4ec4e8bc990d8b0f75e992202bcbdf6524ffe190f5367e874cd64ad5c4b8ed2e"
+  -- @vector policy-document-representative.text
+  policyDocument (VenuePolicy with minStakeAmount = 1.0; maxStakeAmount = 1000.0; minPlatformFee = 0.5; maxPayoutAmount = 5000.0; minLockSeconds = 7200; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 3; requireCustodyProof = True)
+    === "arccade-sdk-digest-v1|t:20:arccade-venue-policyi:1:1r:417:k:22:abort-cooldown-seconds=i:3:300;k:17:concurrency-limit=i:1:3;k:16:cooldown-seconds=i:2:30;k:17:max-cycle-seconds=i:4:3600;k:16:max-lock-seconds=i:5:86400;k:17:max-payout-amount=d:14:50000000000000;k:16:max-stake-amount=d:14:10000000000000;k:17:min-cycle-seconds=i:2:60;k:16:min-lock-seconds=i:4:7200;k:16:min-platform-fee=d:10:5000000000;k:16:min-stake-amount=d:11:10000000000;k:21:require-custody-proof=b:4:true;"
+  -- @vector policy-document-amounts-are-decimals
+  textDigest (policyDocument (VenuePolicy with minStakeAmount = 0.0000000001; maxStakeAmount = 1000.0; minPlatformFee = 0.5; maxPayoutAmount = 0.0; minLockSeconds = 7200; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 3; requireCustodyProof = True))
+    === "7d3838db6df6baeb28b3a49de2f6f0a50244be055fecb41204b43874a25113cc"
+  -- @vector policy-document-amounts-are-decimals.text
+  policyDocument (VenuePolicy with minStakeAmount = 0.0000000001; maxStakeAmount = 1000.0; minPlatformFee = 0.5; maxPayoutAmount = 0.0; minLockSeconds = 7200; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 3; requireCustodyProof = True)
+    === "arccade-sdk-digest-v1|t:20:arccade-venue-policyi:1:1r:392:k:22:abort-cooldown-seconds=i:3:300;k:17:concurrency-limit=i:1:3;k:16:cooldown-seconds=i:2:30;k:17:max-cycle-seconds=i:4:3600;k:16:max-lock-seconds=i:5:86400;k:17:max-payout-amount=d:1:0;k:16:max-stake-amount=d:14:10000000000000;k:17:min-cycle-seconds=i:2:60;k:16:min-lock-seconds=i:4:7200;k:16:min-platform-fee=d:10:5000000000;k:16:min-stake-amount=d:1:1;k:21:require-custody-proof=b:4:true;"
+  -- @vector policy-document-require-custody-proof-false
+  textDigest (policyDocument (VenuePolicy with minStakeAmount = 1.0; maxStakeAmount = 1000.0; minPlatformFee = 0.5; maxPayoutAmount = 5000.0; minLockSeconds = 7200; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 3; requireCustodyProof = False))
+    === "d71b7a2ce4df0636482ed8a563a5b84417929a1c5847292e806d4201f3765942"
+  -- @vector policy-document-require-custody-proof-false.text
+  policyDocument (VenuePolicy with minStakeAmount = 1.0; maxStakeAmount = 1000.0; minPlatformFee = 0.5; maxPayoutAmount = 5000.0; minLockSeconds = 7200; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 3; requireCustodyProof = False)
+    === "arccade-sdk-digest-v1|t:20:arccade-venue-policyi:1:1r:418:k:22:abort-cooldown-seconds=i:3:300;k:17:concurrency-limit=i:1:3;k:16:cooldown-seconds=i:2:30;k:17:max-cycle-seconds=i:4:3600;k:16:max-lock-seconds=i:5:86400;k:17:max-payout-amount=d:14:50000000000000;k:16:max-stake-amount=d:14:10000000000000;k:17:min-cycle-seconds=i:2:60;k:16:min-lock-seconds=i:4:7200;k:16:min-platform-fee=d:10:5000000000;k:16:min-stake-amount=d:11:10000000000;k:21:require-custody-proof=b:5:false;"
+  -- @vector valid-policy-accepts-a-consistent-policy
+  validPolicy (VenuePolicy with minStakeAmount = 1.0; maxStakeAmount = 1000.0; minPlatformFee = 0.5; maxPayoutAmount = 5000.0; minLockSeconds = 7200; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 3; requireCustodyProof = True)
+    === True
+  -- @vector valid-policy-rejects-lock-shorter-than-cycle
+  validPolicy (VenuePolicy with minStakeAmount = 1.0; maxStakeAmount = 1000.0; minPlatformFee = 0.5; maxPayoutAmount = 5000.0; minLockSeconds = 30; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 3; requireCustodyProof = True)
+    === False
+  -- @vector valid-policy-rejects-zero-stake-floor
+  validPolicy (VenuePolicy with minStakeAmount = 0.0; maxStakeAmount = 1000.0; minPlatformFee = 0.5; maxPayoutAmount = 5000.0; minLockSeconds = 7200; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 3; requireCustodyProof = True)
+    === False
+  -- @vector valid-policy-rejects-inverted-stake-band
+  validPolicy (VenuePolicy with minStakeAmount = 1.0; maxStakeAmount = 0.5; minPlatformFee = 0.5; maxPayoutAmount = 5000.0; minLockSeconds = 7200; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 3; requireCustodyProof = True)
+    === False
+  -- @vector valid-policy-rejects-zero-concurrency-limit
+  validPolicy (VenuePolicy with minStakeAmount = 1.0; maxStakeAmount = 1000.0; minPlatformFee = 0.5; maxPayoutAmount = 5000.0; minLockSeconds = 7200; maxLockSeconds = 86400; minCycleSeconds = 60; maxCycleSeconds = 3600; cooldownSeconds = 30; abortCooldownSeconds = 300; concurrencyLimit = 0; requireCustodyProof = True)
+    === False
+
+-- | The period anchor document, including the one on TestNet for 2026-08-27.
+-- Nobody but Daml computes this today, which is exactly why the manifest
+-- must take it from Daml.
+vectorsPeriodAnchor : Script ()
+vectorsPeriodAnchor = script do
+  -- @vector anchor-testnet-2026-08-27
+  textDigest (anchorDocument "tradewars/testnet-arena-v2" "2026-08-27" 1787788800000000 1787875200000000 0 (PeriodTotals with committedUnits = 0; feeUnits = 0; returnedUnits = 0; forfeitedUnits = 0; payoutUnits = 0) 0 1 "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0" "b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb" "caa2d6f54dc9d0be9d165e505757cc760a421c13c75a21a6ac69e194e0470fc6")
+    === "f3e0805b9c3b9b9147f8b7b866ddd34d157d5d1e1e60b5942e14335909a6bd2a"
+  -- @vector anchor-testnet-2026-08-27.text
+  anchorDocument "tradewars/testnet-arena-v2" "2026-08-27" 1787788800000000 1787875200000000 0 (PeriodTotals with committedUnits = 0; feeUnits = 0; returnedUnits = 0; forfeitedUnits = 0; payoutUnits = 0) 0 1 "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0" "b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb" "caa2d6f54dc9d0be9d165e505757cc760a421c13c75a21a6ac69e194e0470fc6"
+    === "arccade-sdk-digest-v1|t:21:arccade.period-anchori:1:1r:632:k:14:committedUnits=i:1:0;k:10:cycleCount=i:1:0;k:8:feeUnits=i:1:0;k:14:forfeitedUnits=i:1:0;k:13:merkleRootHex=t:64:c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0;k:20:nonQualifyingTxCount=i:1:1;k:11:payoutUnits=i:1:0;k:15:periodEndMicros=i:16:1787875200000000;k:8:periodId=t:10:2026-08-27;k:17:periodStartMicros=i:16:1787788800000000;k:16:prevAnchorDigest=t:64:caa2d6f54dc9d0be9d165e505757cc760a421c13c75a21a6ac69e194e0470fc6;k:17:qualifyingTxCount=i:1:0;k:12:reportDigest=t:64:b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb;k:13:returnedUnits=i:1:0;k:7:venueId=t:26:tradewars/testnet-arena-v2;"
+  -- @vector anchor-empty-period-root-is-merkle-empty
+  textDigest (anchorDocument "tradewars/testnet-arena-v2" "2026-08-28" 1787788800000000 1787875200000000 0 (PeriodTotals with committedUnits = 0; feeUnits = 0; returnedUnits = 0; forfeitedUnits = 0; payoutUnits = 0) 0 1 "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0" "b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb" "f3e0805b9c3b9b9147f8b7b866ddd34d157d5d1e1e60b5942e14335909a6bd2a")
+    === "866678007b520f83714954776ffe5725bc9ebb6fd36ea99e4b704b70decdf0e5"
+  -- @vector anchor-empty-period-root-is-merkle-empty.text
+  anchorDocument "tradewars/testnet-arena-v2" "2026-08-28" 1787788800000000 1787875200000000 0 (PeriodTotals with committedUnits = 0; feeUnits = 0; returnedUnits = 0; forfeitedUnits = 0; payoutUnits = 0) 0 1 "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0" "b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb" "f3e0805b9c3b9b9147f8b7b866ddd34d157d5d1e1e60b5942e14335909a6bd2a"
+    === "arccade-sdk-digest-v1|t:21:arccade.period-anchori:1:1r:632:k:14:committedUnits=i:1:0;k:10:cycleCount=i:1:0;k:8:feeUnits=i:1:0;k:14:forfeitedUnits=i:1:0;k:13:merkleRootHex=t:64:c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0;k:20:nonQualifyingTxCount=i:1:1;k:11:payoutUnits=i:1:0;k:15:periodEndMicros=i:16:1787875200000000;k:8:periodId=t:10:2026-08-28;k:17:periodStartMicros=i:16:1787788800000000;k:16:prevAnchorDigest=t:64:f3e0805b9c3b9b9147f8b7b866ddd34d157d5d1e1e60b5942e14335909a6bd2a;k:17:qualifyingTxCount=i:1:0;k:12:reportDigest=t:64:b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb;k:13:returnedUnits=i:1:0;k:7:venueId=t:26:tradewars/testnet-arena-v2;"
+  -- @vector anchor-chain-start-empty-prev-digest
+  textDigest (anchorDocument "tradewars/testnet-arena-v2" "2026-08-01" 1787788800000000 1787875200000000 0 (PeriodTotals with committedUnits = 0; feeUnits = 0; returnedUnits = 0; forfeitedUnits = 0; payoutUnits = 0) 0 1 "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0" "b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb" "")
+    === "f15bcb0678a266dbd359f9254f71732b3296f282cae0ef93fe787681681c382a"
+  -- @vector anchor-chain-start-empty-prev-digest.text
+  anchorDocument "tradewars/testnet-arena-v2" "2026-08-01" 1787788800000000 1787875200000000 0 (PeriodTotals with committedUnits = 0; feeUnits = 0; returnedUnits = 0; forfeitedUnits = 0; payoutUnits = 0) 0 1 "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0" "b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb" ""
+    === "arccade-sdk-digest-v1|t:21:arccade.period-anchori:1:1r:567:k:14:committedUnits=i:1:0;k:10:cycleCount=i:1:0;k:8:feeUnits=i:1:0;k:14:forfeitedUnits=i:1:0;k:13:merkleRootHex=t:64:c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0;k:20:nonQualifyingTxCount=i:1:1;k:11:payoutUnits=i:1:0;k:15:periodEndMicros=i:16:1787875200000000;k:8:periodId=t:10:2026-08-01;k:17:periodStartMicros=i:16:1787788800000000;k:16:prevAnchorDigest=t:0:;k:17:qualifyingTxCount=i:1:0;k:12:reportDigest=t:64:b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb;k:13:returnedUnits=i:1:0;k:7:venueId=t:26:tradewars/testnet-arena-v2;"
+  -- @vector anchor-with-cycles-and-totals
+  textDigest (anchorDocument "tradewars/testnet-arena-v2" "2026-08-26" 1787788800000000 1787875200000000 3 (PeriodTotals with committedUnits = 1600000000000; feeUnits = 5200000000; returnedUnits = 1600000000000; forfeitedUnits = 0; payoutUnits = 0) 6 1 "910a515e5aba2c177291fd253d1cb4dbba7a04878e65b0f8e6d0a2bb54705128" "b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb" "caa2d6f54dc9d0be9d165e505757cc760a421c13c75a21a6ac69e194e0470fc6")
+    === "10cccbfce134a319e4cdcfd51000e5b6502a7e077ddc89d1501d4be1b7e4b436"
+  -- @vector anchor-with-cycles-and-totals.text
+  anchorDocument "tradewars/testnet-arena-v2" "2026-08-26" 1787788800000000 1787875200000000 3 (PeriodTotals with committedUnits = 1600000000000; feeUnits = 5200000000; returnedUnits = 1600000000000; forfeitedUnits = 0; payoutUnits = 0) 6 1 "910a515e5aba2c177291fd253d1cb4dbba7a04878e65b0f8e6d0a2bb54705128" "b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb" "caa2d6f54dc9d0be9d165e505757cc760a421c13c75a21a6ac69e194e0470fc6"
+    === "arccade-sdk-digest-v1|t:21:arccade.period-anchori:1:1r:668:k:14:committedUnits=i:13:1600000000000;k:10:cycleCount=i:1:3;k:8:feeUnits=i:10:5200000000;k:14:forfeitedUnits=i:1:0;k:13:merkleRootHex=t:64:910a515e5aba2c177291fd253d1cb4dbba7a04878e65b0f8e6d0a2bb54705128;k:20:nonQualifyingTxCount=i:1:1;k:11:payoutUnits=i:1:0;k:15:periodEndMicros=i:16:1787875200000000;k:8:periodId=t:10:2026-08-26;k:17:periodStartMicros=i:16:1787788800000000;k:16:prevAnchorDigest=t:64:caa2d6f54dc9d0be9d165e505757cc760a421c13c75a21a6ac69e194e0470fc6;k:17:qualifyingTxCount=i:1:6;k:12:reportDigest=t:64:b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb;k:13:returnedUnits=i:13:1600000000000;k:7:venueId=t:26:tradewars/testnet-arena-v2;"
+
+-- | The cycle-audit-row leaf: the document text and the digest an auditor
+-- recomputes from a published row.
+vectorsAuditRow : Script ()
+vectorsAuditRow = script do
+  -- @vector period-leaf-golden-row
+  periodLeaf goldenAuditRow === "01e89a905ec52a23012354b602cdf583a7bc6dd92d9c36a19aa0346a1cf26237"
+  -- @vector period-leaf-golden-row.text
+  periodLeafDocument goldenAuditRow
+    === "arccade-sdk-digest-v1|t:23:arccade.cycle-audit-rowi:1:1r:636:k:17:committedAtMicros=i:16:1700000000000000;k:14:committedUnits=i:12:300000000000;k:16:concurrencyIndex=i:1:0;k:10:custodyTag=t:33:arccade-game-sdk:1:cycle-golden:x;k:7:cycleId=t:12:cycle-golden;k:11:disposition=t:16:returned-in-full;k:11:entryDigest=t:64:0000000000000000000000000000000000000000000000000000000000000001;k:8:feeUnits=i:9:100000000;k:14:forfeitedUnits=i:1:0;k:8:gameCode=t:13:pixel-race-v1;k:13:outcomeDigest=t:64:0000000000000000000000000000000000000000000000000000000000000002;k:11:payoutUnits=i:1:0;k:6:player=p:20:auditor-golden-party;k:13:returnedUnits=i:12:300000000000;k:15:settledAtMicros=i:16:1700000003600000;"
+  -- @vector period-leaf-ignores-reporting-only-fields
+  periodLeaf goldenAuditRow === "01e89a905ec52a23012354b602cdf583a7bc6dd92d9c36a19aa0346a1cf26237"
+  -- @vector period-leaf-ignores-reporting-only-fields.text
+  periodLeafDocument goldenAuditRow
+    === "arccade-sdk-digest-v1|t:23:arccade.cycle-audit-rowi:1:1r:636:k:17:committedAtMicros=i:16:1700000000000000;k:14:committedUnits=i:12:300000000000;k:16:concurrencyIndex=i:1:0;k:10:custodyTag=t:33:arccade-game-sdk:1:cycle-golden:x;k:7:cycleId=t:12:cycle-golden;k:11:disposition=t:16:returned-in-full;k:11:entryDigest=t:64:0000000000000000000000000000000000000000000000000000000000000001;k:8:feeUnits=i:9:100000000;k:14:forfeitedUnits=i:1:0;k:8:gameCode=t:13:pixel-race-v1;k:13:outcomeDigest=t:64:0000000000000000000000000000000000000000000000000000000000000002;k:11:payoutUnits=i:1:0;k:6:player=p:20:auditor-golden-party;k:13:returnedUnits=i:12:300000000000;k:15:settledAtMicros=i:16:1700000003600000;"
+
+-- | DISPOSITION ETIKETLERI — the five literal outputs of `dispositionTag`.
+--
+-- WHY THIS EXISTS. `dispositionTag` is the boundary between the constructor
+-- the ledger carries in `GameStake_Settle` and the bytes that go into a
+-- cycle-audit-row leaf. A client that passes the CONSTRUCTOR through instead
+-- of the tag builds a leaf that is well formed, folds to a different root, and
+-- is caught only when an auditor's inclusion proof fails to verify — the
+-- latest possible moment.
+--
+-- Until these vectors existed the whole tag table could be renamed to the
+-- constructor names in all three clients at once and nothing fired: the
+-- conformance cases below carried no pinned expectation, so the generator
+-- observed the rename and wrote it into `manifest.json` as the new truth, and
+-- every runner then agreed with it. That is a measured escape, not a
+-- hypothetical one.
+--
+-- The tags are anchored twice, because they are wrong in two different ways:
+--   * as the ORDERED TABLE a client exports as its own constant, where a
+--     rename or a reorder shows up directly; and
+--   * inside the LEAF DOCUMENT, which is where the tag is actually hashed and
+--     where a rename changes a published root.
+vectorsDispositionTag : Script ()
+vectorsDispositionTag = script do
+  -- The whole table in one literal: membership AND order, joined with `|`
+  -- because no tag may contain that character (`isValidCycleId` forbids it in
+  -- ids for the same reason).
+  -- @vector constant-dispositions-order-and-membership
+  T.intercalate "|" (map dispositionTag [ReturnedInFull, ReturnedWithForfeit, ForfeitedInFull, Aborted, ExpiredUnsettled])
+    === "returned-in-full|returned-with-forfeit|forfeited-in-full|aborted|expired-unsettled"
+  -- The tag the ledger reader must put on a settled row before the manifest
+  -- feeds that row back to the leaf builder. This is an INPUT pin: it says what
+  -- the client has to have produced, not what it has to return.
+  -- @vector input.reader-settle-row-disposition
+  dispositionTag ReturnedInFull === "returned-in-full"
+
+-- | The same five tags where they are hashed: one cycle-audit-row leaf per
+-- disposition, document text and digest both. The rows differ from
+-- `goldenAuditRow` only in `cycleId` and `disposition`, so any byte that moves
+-- between them moved because of the tag.
+--
+-- The amounts are deliberately left at the returned-in-full shape rather than
+-- being made consistent with each disposition: this is a test of the TAG, and
+-- a row whose amounts also changed would not say which of the two did it.
+-- The settlement invariants that tie a tag to its amounts are a separate
+-- concern, checked in `Test.GameSdk.LifecycleTest`.
+vectorsDispositionLeaves : Script ()
+vectorsDispositionLeaves = script do
+  -- @vector period-leaf-disposition-returned-in-full
+  periodLeaf (goldenAuditRow with cycleId = "disp-returned-in-full"; disposition = ReturnedInFull)
+    === "8c05241728da24c017b4a775cd197b7f3ca04623f419b7cca4c892830bca2db0"
+  -- @vector period-leaf-disposition-returned-in-full.text
+  periodLeafDocument (goldenAuditRow with cycleId = "disp-returned-in-full"; disposition = ReturnedInFull)
+    === "arccade-sdk-digest-v1|t:23:arccade.cycle-audit-rowi:1:1r:645:k:17:committedAtMicros=i:16:1700000000000000;k:14:committedUnits=i:12:300000000000;k:16:concurrencyIndex=i:1:0;k:10:custodyTag=t:33:arccade-game-sdk:1:cycle-golden:x;k:7:cycleId=t:21:disp-returned-in-full;k:11:disposition=t:16:returned-in-full;k:11:entryDigest=t:64:0000000000000000000000000000000000000000000000000000000000000001;k:8:feeUnits=i:9:100000000;k:14:forfeitedUnits=i:1:0;k:8:gameCode=t:13:pixel-race-v1;k:13:outcomeDigest=t:64:0000000000000000000000000000000000000000000000000000000000000002;k:11:payoutUnits=i:1:0;k:6:player=p:20:auditor-golden-party;k:13:returnedUnits=i:12:300000000000;k:15:settledAtMicros=i:16:1700000003600000;"
+  -- @vector period-leaf-disposition-returned-with-forfeit
+  periodLeaf (goldenAuditRow with cycleId = "disp-returned-with-forfeit"; disposition = ReturnedWithForfeit)
+    === "a11f7198d943c1e4629aa089c271cd828d698266b6b845b0bb27ff30b5f9dd30"
+  -- @vector period-leaf-disposition-returned-with-forfeit.text
+  periodLeafDocument (goldenAuditRow with cycleId = "disp-returned-with-forfeit"; disposition = ReturnedWithForfeit)
+    === "arccade-sdk-digest-v1|t:23:arccade.cycle-audit-rowi:1:1r:655:k:17:committedAtMicros=i:16:1700000000000000;k:14:committedUnits=i:12:300000000000;k:16:concurrencyIndex=i:1:0;k:10:custodyTag=t:33:arccade-game-sdk:1:cycle-golden:x;k:7:cycleId=t:26:disp-returned-with-forfeit;k:11:disposition=t:21:returned-with-forfeit;k:11:entryDigest=t:64:0000000000000000000000000000000000000000000000000000000000000001;k:8:feeUnits=i:9:100000000;k:14:forfeitedUnits=i:1:0;k:8:gameCode=t:13:pixel-race-v1;k:13:outcomeDigest=t:64:0000000000000000000000000000000000000000000000000000000000000002;k:11:payoutUnits=i:1:0;k:6:player=p:20:auditor-golden-party;k:13:returnedUnits=i:12:300000000000;k:15:settledAtMicros=i:16:1700000003600000;"
+  -- @vector period-leaf-disposition-forfeited-in-full
+  periodLeaf (goldenAuditRow with cycleId = "disp-forfeited-in-full"; disposition = ForfeitedInFull)
+    === "3e0da3121acf4ad53a0f627f2f128a3182297b5cc8daac16dc2c628c02452588"
+  -- @vector period-leaf-disposition-forfeited-in-full.text
+  periodLeafDocument (goldenAuditRow with cycleId = "disp-forfeited-in-full"; disposition = ForfeitedInFull)
+    === "arccade-sdk-digest-v1|t:23:arccade.cycle-audit-rowi:1:1r:647:k:17:committedAtMicros=i:16:1700000000000000;k:14:committedUnits=i:12:300000000000;k:16:concurrencyIndex=i:1:0;k:10:custodyTag=t:33:arccade-game-sdk:1:cycle-golden:x;k:7:cycleId=t:22:disp-forfeited-in-full;k:11:disposition=t:17:forfeited-in-full;k:11:entryDigest=t:64:0000000000000000000000000000000000000000000000000000000000000001;k:8:feeUnits=i:9:100000000;k:14:forfeitedUnits=i:1:0;k:8:gameCode=t:13:pixel-race-v1;k:13:outcomeDigest=t:64:0000000000000000000000000000000000000000000000000000000000000002;k:11:payoutUnits=i:1:0;k:6:player=p:20:auditor-golden-party;k:13:returnedUnits=i:12:300000000000;k:15:settledAtMicros=i:16:1700000003600000;"
+  -- @vector period-leaf-disposition-aborted
+  periodLeaf (goldenAuditRow with cycleId = "disp-aborted"; disposition = Aborted)
+    === "a355ea7900f92119faf9f38e982231564770d26242bd8f0724feb71c1820e6ea"
+  -- @vector period-leaf-disposition-aborted.text
+  periodLeafDocument (goldenAuditRow with cycleId = "disp-aborted"; disposition = Aborted)
+    === "arccade-sdk-digest-v1|t:23:arccade.cycle-audit-rowi:1:1r:626:k:17:committedAtMicros=i:16:1700000000000000;k:14:committedUnits=i:12:300000000000;k:16:concurrencyIndex=i:1:0;k:10:custodyTag=t:33:arccade-game-sdk:1:cycle-golden:x;k:7:cycleId=t:12:disp-aborted;k:11:disposition=t:7:aborted;k:11:entryDigest=t:64:0000000000000000000000000000000000000000000000000000000000000001;k:8:feeUnits=i:9:100000000;k:14:forfeitedUnits=i:1:0;k:8:gameCode=t:13:pixel-race-v1;k:13:outcomeDigest=t:64:0000000000000000000000000000000000000000000000000000000000000002;k:11:payoutUnits=i:1:0;k:6:player=p:20:auditor-golden-party;k:13:returnedUnits=i:12:300000000000;k:15:settledAtMicros=i:16:1700000003600000;"
+  -- @vector period-leaf-disposition-expired-unsettled
+  periodLeaf (goldenAuditRow with cycleId = "disp-expired-unsettled"; disposition = ExpiredUnsettled)
+    === "6622687168dedfd484753020120da983d548d1e2b26fdc872c96419bedd39413"
+  -- @vector period-leaf-disposition-expired-unsettled.text
+  periodLeafDocument (goldenAuditRow with cycleId = "disp-expired-unsettled"; disposition = ExpiredUnsettled)
+    === "arccade-sdk-digest-v1|t:23:arccade.cycle-audit-rowi:1:1r:647:k:17:committedAtMicros=i:16:1700000000000000;k:14:committedUnits=i:12:300000000000;k:16:concurrencyIndex=i:1:0;k:10:custodyTag=t:33:arccade-game-sdk:1:cycle-golden:x;k:7:cycleId=t:22:disp-expired-unsettled;k:11:disposition=t:17:expired-unsettled;k:11:entryDigest=t:64:0000000000000000000000000000000000000000000000000000000000000001;k:8:feeUnits=i:9:100000000;k:14:forfeitedUnits=i:1:0;k:8:gameCode=t:13:pixel-race-v1;k:13:outcomeDigest=t:64:0000000000000000000000000000000000000000000000000000000000000002;k:11:payoutUnits=i:1:0;k:6:player=p:20:auditor-golden-party;k:13:returnedUnits=i:12:300000000000;k:15:settledAtMicros=i:16:1700000003600000;"
+
+-- | THE ROW A LEDGER READER REBUILDS, not one typed out here.
+--
+-- This is what `rowsFromTransactions` produces from the synthetic settled cycle
+-- the conformance manifest carries (`syn-settle-1`): a `GameStake` created by
+-- `Entitlement_Commit` and closed by `GameStake_Settle` with the constructor
+-- `ReturnedInFull` in its choice argument. The reader's job on that field is
+-- exactly `dispositionTag` — and until this row existed, nothing measured it,
+-- because every other row in the suite was written down with its tag already
+-- resolved.
+--
+-- The party is the real TestNet validator id, fingerprint included, because a
+-- reader that truncates a party at the `::` produces a leaf that differs from
+-- the ledger in one field and is otherwise perfect.
+readerSettleRow : CycleAuditRow
+readerSettleRow = CycleAuditRow with
+  cycleId = "syn-settle-1"
+  player = fromSome (partyFromText "arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf")
+  gameCode = "trade-wars-v4"
+  concurrencyIndex = 0
+  entryDigest = "5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
+  outcomeDigest = "124de70ecc959cfe2d9f01362a414e9a493df2e10b521551ffd262c1f29d2f0a"
+  committedUnits = 1000000000000
+  feeUnits = 5000000000
+  returnedUnits = 1000000000000
+  forfeitedUnits = 0
+  payoutUnits = 0
+  disposition = ReturnedInFull
+  committedAtMicros = 1787437747372202
+  settledAtMicros = 1787437775189712
+  custodyTag = "arccade-game-sdk:1:syn-settle-1:5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852"
+
+-- | The leaf of that row. The manifest hands the row the CLIENT rebuilt to the
+-- leaf builder and measures the document against this literal, so the reader's
+-- tag table is inside the bytes being compared rather than inside the
+-- expectation being written.
+vectorsReaderRebuiltRow : Script ()
+vectorsReaderRebuiltRow = script do
+  -- @vector period-leaf-of-a-reader-rebuilt-row
+  periodLeaf readerSettleRow === "49ad75762e43b5417e5b0407bbe8255ee5f4c80d1caaa1aa9ff1f3661e9d1077"
+  -- @vector period-leaf-of-a-reader-rebuilt-row.text
+  periodLeafDocument readerSettleRow
+    === "arccade-sdk-digest-v1|t:23:arccade.cycle-audit-rowi:1:1r:772:k:17:committedAtMicros=i:16:1787437747372202;k:14:committedUnits=i:13:1000000000000;k:16:concurrencyIndex=i:1:0;k:10:custodyTag=t:96:arccade-game-sdk:1:syn-settle-1:5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852;k:7:cycleId=t:12:syn-settle-1;k:11:disposition=t:16:returned-in-full;k:11:entryDigest=t:64:5669632b0fecad52d4c7e31afffb710e13f97b7b2b7c5f2606f5d4c84c594852;k:8:feeUnits=i:10:5000000000;k:14:forfeitedUnits=i:1:0;k:8:gameCode=t:13:trade-wars-v4;k:13:outcomeDigest=t:64:124de70ecc959cfe2d9f01362a414e9a493df2e10b521551ffd262c1f29d2f0a;k:11:payoutUnits=i:1:0;k:6:player=p:89:arccade-validator-1::1220ce19f2a2928e5775dbc18e14d37c1fa4d8e5579d6234c3def66438a182e963bf;k:13:returnedUnits=i:13:1000000000000;k:15:settledAtMicros=i:16:1787437775189712;"
+
+-- | ROUNDING DIRECTION: unreachable, not merely un-anchorable.
+--
+-- The earlier note here said the direction could not be anchored because Daml
+-- `Decimal` is `Numeric 10` and no Daml literal can carry an eleventh
+-- fractional digit. That is true, and it is the wrong reason: it makes a
+-- deliberate property of the contract look like an accident of what one of the
+-- four implementations can spell.
+--
+-- The real reason is that `amountUnits` is LOSSLESS-OR-REJECT in every
+-- implementation, so no input of any kind reaches a rounding decision:
+--
+--   * Daml (`ArCCade.GameSdk.Digest.amountUnits`) truncates `d * 1e10` and then
+--     requires `intToDecimal u / 1e10 == d`. On a `Numeric 10` the scaling is
+--     exact — multiplying by 1e10 moves the last representable digit into the
+--     ones place — so `truncate` never drops anything and the guard never
+--     fires. Both halves are dead weight against a value that cannot exist.
+--   * Java takes `setScale(0, RoundingMode.DOWN)` and then rejects unless the
+--     value divides back exactly. Every input that could distinguish DOWN from
+--     any other RoundingMode is refused by the very next statement, so the
+--     rounding mode on that line is unobservable.
+--   * JavaScript and Python never scale at all until they have checked that
+--     every digit past the tenth is a zero, and throw if one is not.
+--
+-- So the direction is not an unpinned rule; it is a rule with no reachable
+-- input, in all four implementations. What IS normative — and what a port can
+-- actually get wrong — is the refusal itself, and that is pinned in the
+-- conformance manifest as decision D12 with
+-- `amount-negative-sub-unit-refused-not-rounded` carrying it. A client that
+-- rounds instead of refusing turns that decision red.
+--
+-- What stays here is the pair of facts that make the claim above checkable
+-- rather than assertable: the direction Daml's `truncate` actually has (which
+-- is what `amountUnits` would use if it ever mattered), and the exactness of
+-- the scaling at both ends of the representable band, which is what makes it
+-- never matter.
+roundingDirectionIsUnreachable : Script ()
+roundingDirectionIsUnreachable = script do
+  -- The direction, if it were ever reached: toward zero on both signs.
+  truncate (1.9 : Decimal) === 1
+  truncate (-1.9 : Decimal) === (-1)
+  truncate (-0.9 : Decimal) === 0
+  -- ...and the reason it is never reached: the round-trip the guard tests is
+  -- an identity on every Decimal, checked at the finest unit and at both ends
+  -- of the band, where an inexact scaling would show up first.
+  intToDecimal (amountUnits 0.0000000001) / 1e10 === 0.0000000001
+  intToDecimal (amountUnits (-0.0000000001)) / 1e10 === (-0.0000000001)
+  intToDecimal (amountUnits 922337203.6854775807) / 1e10 === 922337203.6854775807
+  intToDecimal (amountUnits (-922337203.6854775808)) / 1e10 === (-922337203.6854775808)

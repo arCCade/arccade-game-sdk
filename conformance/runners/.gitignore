@@ -1,0 +1,10 @@
+# Runner build output and run results are artifacts, not source.
+#
+# `results/` carries no leading slash, so it matches at any depth: the JS and
+# Python runners write runners/results/, the Java one writes
+# runners/java/results/, and only the second path was named here — leaving
+# ~1.2 MB of verdicts committable, against a manifest sha256 they no longer
+# matched. A committed .verdicts file is a frozen baseline nobody froze on
+# purpose; the reviewed one lives in conformance/run-all.sh.
+java/.build/
+results/

@@ -1,0 +1,10 @@
+{
+  "fromMicros" : 1787788800000000,
+  "toMicros" : 1787875200000000,
+  "cycleCount" : 0,
+  "rows" : [ ],
+  "leaves" : [ ],
+  "merkleRoot" : "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0",
+  "warnings" : [ ],
+  "openStakes" : 0
+}

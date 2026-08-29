@@ -32,6 +32,19 @@ fix, a helper, better types — does not require a new Daml package and another
 round of on-chain vetting, which is governance-paced. The release workflow
 enforces exactly this.
 
+**A consequence worth stating, because it will surprise you.** New exports can
+appear in a patch release. 1.5.2 added nine capabilities — period-anchor and
+policy documents, the settlement invariant, and the four ledger-time operators.
+Plain semver would call that a minor bump. It is a patch here because the
+*agreement did not move*: those values were already defined by the 1.5.0
+contracts and the client was simply behind. A client catching up to an agreement
+that already exists has not changed the agreement.
+
+The rule is therefore: **major.minor answers "which contract am I speaking to",
+not "how much of it have I implemented".** If you need the second question
+answered, the conformance suite answers it exactly — `conformance/manifest.json`
+lists all 72 capabilities and which client implements each.
+
 ## Why a digest has to match exactly
 
 `GameStake_Settle` recomputes the commitment on the ledger and rejects a
