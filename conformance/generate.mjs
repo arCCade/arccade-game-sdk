@@ -2502,10 +2502,22 @@ const LIVE_ANCHOR = {
 }
 const LIVE_ANCHOR_DIGEST = 'f3e0805b9c3b9b9147f8b7b866ddd34d157d5d1e1e60b5942e14335909a6bd2a'
 
-// Cross-check against the published report when it is reachable. Absent, the
-// pin still stands on its own; present and disagreeing, the run stops.
-const LIVE_ANCHOR_FILE = '/opt/arccade/reports/game-sdk/tradewars_testnet-arena-v2_2026-08-27.anchor.json'
-let liveAnchorCrossCheck = 'report file not present in this environment'
+// Cross-check against the anchor as published on Canton.
+//
+// VENDORED, not read from the host. It used to point at
+// /opt/arccade/reports/game-sdk/... on the machine that publishes the reports,
+// and the manifest recorded WHETHER THAT PATH EXISTED — so the file this
+// generator produced differed between this box and anywhere else, and
+// `--check` passed here and failed in CI. A reproducibility check that is
+// itself host-dependent is worse than none: it goes green exactly where nobody
+// is watching.
+//
+// The anchor is public — it is served at
+// https://audit.arccade.io/testnet/ and the contract it describes is on the
+// ledger — so vendoring it costs nothing and makes the cross-check run
+// everywhere, including in CI, where it can now fail.
+const LIVE_ANCHOR_FILE = new URL('../test-vectors/anchor-2026-08-27.json', import.meta.url).pathname
+let liveAnchorCrossCheck = 'vendored anchor test-vectors/anchor-2026-08-27.json is missing'
 if (existsSync(LIVE_ANCHOR_FILE)) {
   const live = JSON.parse(readFileSync(LIVE_ANCHOR_FILE, 'utf8'))
   const mismatches = []
@@ -2515,7 +2527,13 @@ if (existsSync(LIVE_ANCHOR_FILE)) {
     prevAnchorDigest: LIVE_ANCHOR.prevAnchorDigest, anchorDigest: LIVE_ANCHOR_DIGEST,
   })) if (live[k] !== v) mismatches.push(`${k}: pinned ${v}, published ${live[k]}`)
   if (mismatches.length) problem(`live anchor cross-check failed:\n    ${mismatches.join('\n    ')}`)
-  liveAnchorCrossCheck = mismatches.length ? 'MISMATCH' : `matches ${LIVE_ANCHOR_FILE}`
+  // The RESULT, not the path: an absolute path here is what made the manifest
+  // differ between machines in the first place.
+  liveAnchorCrossCheck = mismatches.length
+    ? 'MISMATCH'
+    : 'matches test-vectors/anchor-2026-08-27.json'
+} else {
+  problem(`vendored anchor missing: ${LIVE_ANCHOR_FILE}`)
 }
 
 const anchorArg = (a) => A.record('period-anchor', Object.fromEntries(

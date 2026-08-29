@@ -1,0 +1,9 @@
+{
+  "venueId": "tradewars/testnet-arena-v2",
+  "periodId": "2026-08-27",
+  "anchorCid": "009354aa2b5f39b8fda3be12df6499799007d6cb629bb2f46a738ec9b95f0a664cca1212202520fe2a5661946815d557faca80e91eb43a5cae7c05c4e07ead9503fc5100b4",
+  "merkleRootHex": "c950347c02be45f67730e2de280fafe0834b97822d98c01717a350e7ab5f61b0",
+  "anchorDigest": "f3e0805b9c3b9b9147f8b7b866ddd34d157d5d1e1e60b5942e14335909a6bd2a",
+  "prevAnchorDigest": "caa2d6f54dc9d0be9d165e505757cc760a421c13c75a21a6ac69e194e0470fc6",
+  "reportDigest": "b4fda252f5064e39a0ed7a6e2914794545a3523b965e631eb94920f38be973fb"
+}
