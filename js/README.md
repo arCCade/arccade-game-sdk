@@ -45,6 +45,40 @@ not "how much of it have I implemented".** If you need the second question
 answered, the conformance suite answers it exactly — `conformance/manifest.json`
 lists all 72 capabilities and which client implements each.
 
+## 1.5.3 changes behaviour that used to be silently wrong
+
+Nine defects are fixed here and every one of them **throws where it previously
+returned**. That is a runtime break for a caller who was relying on the old
+answer — and relying on it meant computing a value the ledger would not accept,
+so the break is the point:
+
+- `canonInt(true)` returned `i:1:1`; a boolean now throws. `BigInt(true)` is 1n,
+  so `true` and `1` produced the same document.
+- `textDigest('')` returned the sha256 of nothing; empty text now throws. Daml's
+  `toHex ""` is a runtime error, so that digest was one the ledger could never
+  compute.
+- `tradeDocument` / `transferDocument` joined components with `|` without
+  screening for it. A party name or meta value containing a pipe reshaped the
+  document, so two different inputs signed as one. Now refused.
+- `buildCommitCommands` wrote `String(undefined)` — the literal text
+  `undefined` — as `feeAmount` when it was omitted. Now refused; a free venue
+  passes `'0.0'`.
+- `amountUnits(' 1.0')` trimmed and accepted. Untrimmed input is now refused,
+  because `' 1.0'` and `'1.0'` resolving to the same units means two inputs
+  reach one commitment.
+- `assertValidCycleId` counted UTF-16 units, so it rejected a valid 64
+  code-point id the ledger accepts.
+- `canonTime` routed through `Date.parse` and truncated microseconds to
+  milliseconds, producing a digest Daml would not reproduce.
+- `rowsFromTransactions` broke ties with `localeCompare` — locale- and
+  ICU-version-dependent — so two honest implementations could publish
+  **different Merkle roots over the same cycles**. Now ordered by Unicode code
+  point, and `REPORT_ORDER` says so.
+
+The version is a PATCH under the policy above: the *agreement* did not move.
+These were always the rules; the client was wrong about them. All 470
+conformance cases now pass in JavaScript, Python and Java alike.
+
 ## Why a digest has to match exactly
 
 `GameStake_Settle` recomputes the commitment on the ledger and rejects a

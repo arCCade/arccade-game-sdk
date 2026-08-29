@@ -40,6 +40,14 @@ export function canon(tag, value) {
 export const canonText = (s) => canon('t', s)
 
 export function canonInt(i) {
+  // `BigInt(true)` 1n verir: boolean sessizce tamsayiya donusur ve `b:4:true`
+  // yerine `i:1:1` hash'lenir. Iki farkli deger ayni belgeyi uretirse taahhut
+  // semasi kirilir; boolean icin `canonBool` var.
+  if (typeof i === 'boolean') {
+    throw new Error(
+      `arccade-sdk-digest-v1: desteklenmeyen tamsayi turu: boolean (canonBool kullanin): ${i}`,
+    )
+  }
   const v = typeof i === 'bigint' ? i : BigInt(i)
   return canon('i', v.toString())
 }
@@ -103,6 +111,11 @@ export function canonDocument(schema, version, kvs) {
  * `sha256sum` ile elde eder.
  */
 export function textDigest(t) {
+  // Bos dizenin sha256'si gecerli bir degerdir ama BURADA bir hatadir: bos bir
+  // belge, olusturulamamis bir belgeden ayirt edilemez. Daml tarafi da reddeder.
+  if (typeof t !== 'string' || t.length === 0) {
+    throw new Error('arccade-sdk-digest-v1: gecersiz bos metin: bos dize digest almaz')
+  }
   return createHash('sha256').update(Buffer.from(t, 'utf8')).digest('hex')
 }
 
@@ -125,7 +138,9 @@ const MIN_UNITS = -9223372036854775808n
 export function amountUnits(d) {
   let s
   if (typeof d === 'string') {
-    s = d.trim()
+    // Kirpma YOK. `" 1.0"` ile `"1.0"` ayni birimlere cozulurse, iki farkli
+    // girdi ayni taahhude gider; dilbilgisi neyi kabul ettigini kendi soylesin.
+    s = d
   } else if (typeof d === 'bigint') {
     s = d.toString()
   } else if (typeof d === 'number') {
@@ -175,6 +190,16 @@ export function toMicros(t) {
   if (t instanceof Date) return BigInt(t.getTime()) * 1000n
   if (typeof t === 'number') return BigInt(Math.trunc(t)) * 1000n
   if (typeof t === 'string') {
+    // `Date.parse` MILISANIYE hassasiyetindedir: mikrosaniye tasiyan bir ledger
+    // damgasi sessizce kirpilir ve digest, Daml'in urettiginden farkli olur.
+    // Saniyeye kadarki kismi Date'e birak, kesri kendimiz oku.
+    const m = /^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?$/.exec(t)
+    if (m) {
+      const whole = Date.parse(`${m[1].replace(' ', 'T')}${m[3] ?? 'Z'}`)
+      if (Number.isNaN(whole)) throw new Error(`arccade-sdk-digest-v1: gecersiz zaman: ${t}`)
+      const frac = ((m[2] ?? '') + '000000').slice(0, 6)
+      return BigInt(whole / 1000) * 1000000n + BigInt(frac)
+    }
     const ms = Date.parse(t)
     if (Number.isNaN(ms)) throw new Error(`arccade-sdk-digest-v1: gecersiz zaman: ${t}`)
     return BigInt(ms) * 1000n

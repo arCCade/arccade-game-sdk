@@ -127,21 +127,6 @@ done
 frozen_verdicts() {
 # BEGIN FROZEN VERDICTS
 cat <<'FROZEN'
-amount-rejects-untrimmed-whitespace        fail pass pass  # G03-whitespace js:fail recorded-divergence
-builder-commit-rejects-missing-fee-amount  fail pass pass  # D10 js:fail recorded-divergence
-canon-int-boolean-rejected                 fail pass pass  # D9 js:fail recorded-divergence
-canon-time-truncates-to-milliseconds       fail pass pass  # D3 js:fail recorded-divergence
-custody-tag-astral-cycle-id                fail pass pass  # D2 js:fail recorded-divergence
-cycleid-64-astral-codepoints               fail pass pass  # D2 js:fail recorded-divergence
-report-order-astral-vs-replacement         fail pass pass  # D1 js:fail recorded-divergence
-report-order-constant-names-a-collation    fail pass pass  # D11 js:fail recorded-divergence
-report-order-mixed-case-hyphenated         fail pass pass  # D1 js:fail recorded-divergence
-report-order-underscore-vs-hyphen          fail pass pass  # D1 js:fail recorded-divergence
-report-order-uppercase-b-vs-lowercase-a    fail pass pass  # D1 js:fail recorded-divergence
-text-digest-empty-rejected                 fail pass pass  # D7 js:fail recorded-divergence
-trade-document-rejects-pipe-in-meta-value  fail pass pass  # D8 js:fail recorded-divergence
-trade-document-rejects-pipe-in-party       fail pass pass  # D8 js:fail recorded-divergence
-transfer-document-rejects-pipe-in-meta     fail pass pass  # D8 js:fail recorded-divergence
 FROZEN
 # END FROZEN VERDICTS
 }

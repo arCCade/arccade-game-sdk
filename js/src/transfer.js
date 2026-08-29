@@ -32,6 +32,25 @@ export const REASON_P2P = 'p2p'
 
 const REASONS = new Set([REASON_REWARD, REASON_PAYOUT, REASON_REFUND, REASON_P2P])
 
+
+/**
+ * Belge bilesenleri ayiriciyi ICEREMEZ.
+ *
+ * Parcalar `|` ile birlestiriliyor. Bir parti adi ya da meta degeri `|`
+ * tasirsa, birlestirilmis metin bir fazla bileseni varmis gibi okunur: iki
+ * FARKLI girdi ayni belgeyi -- dolayisiyla ayni digest'i -- uretir. Bir
+ * taahhut semasinda bu, kacirma degil dogrudan sahteciliktir.
+ */
+function assertNoSeparator(parts) {
+  for (const p of parts) {
+    if (String(p).includes('|')) {
+      throw new Error(
+        `arccade-sdk-digest-v1: belge bileseni '|' iceremez (belge ayristirilamaz olur): ${JSON.stringify(p)}`,
+      )
+    }
+  }
+}
+
 export function transferDocument({ transferId, sender, recipients, reason, meta = {} }) {
   const parts = [`transferId=${transferId}`, `sender=${sender}`, `reason=${reason}`]
   for (const r of recipients) {
@@ -40,6 +59,7 @@ export function transferDocument({ transferId, sender, recipients, reason, meta 
   for (const [k, v] of Object.entries(meta).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     parts.push(`meta.${k}=${v}`)
   }
+  assertNoSeparator(parts)
   return TRANSFER_TAG_PREFIX + parts.join('|')
 }
 

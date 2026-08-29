@@ -251,6 +251,10 @@ const REJECT_MAP = [
   { group: "audit", match: "negative settlement amount", class: "out-of-range" },
   { group: "audit", match: "payout above the policy cap", class: "invariant-violated" },
   { group: "audit", match: "duplicate cycleId in a period", class: "invariant-violated" },
+  { group: "digest.scalar", match: "desteklenmeyen tamsayi turu", class: "bad-type" },
+  { group: "digest.text", match: "gecersiz bos metin", class: "bad-format" },
+  { group: "value-documents", match: "belge bileseni '|' iceremez", class: "not-injective" },
+  { group: "builder", match: "feeAmount zorunlu", class: "bad-type" },
   { group: "audit", match: "Cannot convert", class: "bad-format" },]
 
 for (const r of REJECT_MAP) {

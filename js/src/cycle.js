@@ -47,7 +47,11 @@ export function newCycleId(prefix = 'c') {
 }
 
 export function assertValidCycleId(cycleId) {
-  if (typeof cycleId !== 'string' || cycleId.length === 0 || cycleId.length > 64) {
+  // `.length` UTF-16 KOD BIRIMI sayar: astral bir karakter iki sayilir, boylece
+  // 64 kod noktalik gecerli bir id reddedilir. Sinir kod noktasi cinsindendir --
+  // kanonik kodlamanin her yerinde oldugu gibi.
+  const n = typeof cycleId === 'string' ? [...cycleId].length : 0
+  if (typeof cycleId !== 'string' || n === 0 || n > 64) {
     throw new Error(`gecersiz cycleId (bos olmamali, <=64 karakter): ${JSON.stringify(cycleId)}`)
   }
   if (cycleId.includes(':') || cycleId.includes('|')) {
@@ -121,6 +125,15 @@ export function buildCommitCommands(opts) {
   }
 
   const outputs = []
+  // `String(undefined)` "undefined" verir ve bu, ucret alani olarak LEDGER'A
+  // yazilir: Daml tarafinda ayristirilamayan, geri alinamayan bir taahhut.
+  // Ucretsiz bir venue icin dogru deger '0.0'dir, eksik alan degil.
+  if (feeAmount === undefined || feeAmount === null) {
+    throw new Error(
+      "arccade-sdk-digest-v1: feeAmount zorunlu (ucretsiz venue icin '0.0' verin), " +
+      'desteklenmeyen tur: ' + typeof feeAmount,
+    )
+  }
   if (Number(feeAmount) > 0) {
     outputs.push({ receiver: venue, amount: String(feeAmount), receiverFeeRatio: '0.0' })
   }

@@ -165,6 +165,34 @@ function exitAmounts(commit, closing) {
   }
 }
 
+
+/**
+ * Orders two strings by Unicode code point.
+ *
+ * NOT `localeCompare`, which was here before: it is locale- and ICU-version
+ * dependent, so two honest implementations -- or the same one on two hosts --
+ * could order a tie differently and compute DIFFERENT MERKLE ROOTS over the
+ * same set of cycles. The root is the thing an auditor compares; an ordering
+ * that depends on the machine makes it unfalsifiable.
+ *
+ * Nor is it `<` on strings, which compares UTF-16 code units: an astral
+ * character (surrogate 0xD800-0xDBFF) would sort BEFORE U+FFFD, and code-point
+ * order puts it after. Daml's Text ordering is by code point, and that is the
+ * agreement.
+ */
+function compareByCodePoint(a, b) {
+  const ai = a[Symbol.iterator]()
+  const bi = b[Symbol.iterator]()
+  for (;;) {
+    const x = ai.next()
+    const y = bi.next()
+    if (x.done || y.done) return x.done && y.done ? 0 : (x.done ? -1 : 1)
+    const cx = x.value.codePointAt(0)
+    const cy = y.value.codePointAt(0)
+    if (cx !== cy) return cx < cy ? -1 : 1
+  }
+}
+
 /**
  * Joins commit and closing halves into report rows.
  *
@@ -228,14 +256,15 @@ export function rowsFromTransactions(transactions) {
   // compute different Merkle roots over the same set.
   rows.sort((a, b) =>
     a.committedAtMicros === b.committedAtMicros
-      ? a.cycleId.localeCompare(b.cycleId)
+      ? compareByCodePoint(a.cycleId, b.cycleId)
       : (a.committedAtMicros < b.committedAtMicros ? -1 : 1))
 
   return { rows, warnings, openStakes, orphanClosings }
 }
 
 /** The canonical ordering a period report and its Merkle root must use. */
-export const REPORT_ORDER = 'committedAtMicros, then cycleId'
+export const REPORT_ORDER =
+  'committedAtMicros ascending, then cycleId ascending by Unicode code point'
 
 /** Strips the reporting-only fields, leaving exactly what the leaf hashes. */
 export function toLeafRow(row) {

@@ -79,6 +79,25 @@ export function leg({ sender, receiver, instrumentId, amount }) {
  * Bir item'in adi, gorseli, nadirlik seviyesi, oyun ici etkisi — hicbiri
  * zincire yazilmaz. Zincirde olan sey SAHIPLIK DEGISIMIDIR.
  */
+
+/**
+ * Belge bilesenleri ayiriciyi ICEREMEZ.
+ *
+ * Parcalar `|` ile birlestiriliyor. Bir parti adi ya da meta degeri `|`
+ * tasirsa, birlestirilmis metin bir fazla bileseni varmis gibi okunur: iki
+ * FARKLI girdi ayni belgeyi -- dolayisiyla ayni digest'i -- uretir. Bir
+ * taahhut semasinda bu, kacirma degil dogrudan sahteciliktir.
+ */
+function assertNoSeparator(parts) {
+  for (const p of parts) {
+    if (String(p).includes('|')) {
+      throw new Error(
+        `arccade-sdk-digest-v1: belge bileseni '|' iceremez (belge ayristirilamaz olur): ${JSON.stringify(p)}`,
+      )
+    }
+  }
+}
+
 export function tradeDocument({ tradeId, maker, taker, legs, expiresAt, meta = {} }) {
   assertValidTradeId(tradeId)
   const parts = [
@@ -93,6 +112,7 @@ export function tradeDocument({ tradeId, maker, taker, legs, expiresAt, meta = {
   for (const [k, v] of Object.entries(meta).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     parts.push(`meta.${k}=${v}`)
   }
+  assertNoSeparator(parts)
   return TRADE_TAG_PREFIX + parts.join('|')
 }
 

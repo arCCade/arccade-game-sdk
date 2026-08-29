@@ -20,12 +20,21 @@ would drive it, it passes every case in P with no `unsupported` result and no
 
 Two consequences are load-bearing and are stated here rather than left implicit:
 
-**The suite is expected to ship RED.** 13 normative decisions are recorded in
-`manifest.json` under `decisions`, and 15 cases currently disagree with the
-JavaScript client. That is the point. A conformance suite that goes green on
-day one has been written to match the code instead of to match the ledger. The
-disagreements are listed in `divergences`, each naming the decision, what was
-pinned, what the client actually did, and its raw error text.
+**The suite was built to ship RED, and the order that happened in is the
+whole argument.** 13 normative decisions are recorded in `manifest.json` under
+`decisions`. When they were written, **15 cases disagreed** with the JavaScript
+client; today **0 cases currently disagree**, because the client was changed to
+meet the pins — not because the pins were relaxed to meet the client. A conformance suite that goes
+green on day one has been written to match the code instead of the ledger; one
+that goes green after the code moves has done its job.
+
+The decisions stay pinned to their cases exactly so this is reversible
+evidence: a regression in any client turns them red again rather than passing
+unnoticed. What the 15 were, and what each cost, is in `divergences` and in the
+decision list — D1 (a Merkle root that depended on the host's ICU version), D8
+(a pipe in a party name silently reshaping a signed document) and D10 (the
+literal text `undefined` written to the ledger as a fee) are the ones worth
+reading before trusting a client in a fourth language.
 
 **A capability with zero cases is a hole, not a pass.** `generate.mjs` refuses
 to write the manifest if any catalogued capability has no case.
@@ -369,9 +378,12 @@ Differing `.verdicts` lines, per profile, for each pair:
 `conformance/run-all.sh` automates this: it drives all three with one invocation
 shape, asserts they ran the same case set, prints the pairwise diff, checks
 `goesRed` against all three, and judges the per-case verdict triple against a
-frozen baseline of 15 lines, every one a recorded divergence. It was 55: the
-other 40 were `no-impl:js` waivers, and `--freeze` reported all 40 as STALE once
-the JavaScript client was actually driven.
+frozen baseline — now **0 lines**, because all 470 cases pass unanimously in all
+three clients. The baseline was 55, then 15, and each drop was earned the same
+way: 40 `no-impl:js` waivers went STALE once the JavaScript client was actually
+driven, and the last 15 went STALE once it was fixed to satisfy the pins. An
+empty baseline is not a weaker check — every line in it was a waiver, and a
+regression in any client re-populates it.
 
 ### One wart, verified
 
@@ -477,7 +489,7 @@ mutation-tested by breaking it on purpose.
     while carrying **zero cases**, which no evidence could contradict. A
     decision must now name at least one case: the pinned case that carries it,
     or — once every client agrees and there is nothing left to pin — the cases
-    it `governs`. **4 settled decisions** (D4, D5, D6, D12) are in that state, and
+    it `governs`. **13 settled decisions** are in that state, and
     their cases stay attached so a regression in any client turns them red again
     instead of passing unnoticed.
 

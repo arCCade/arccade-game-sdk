@@ -246,6 +246,14 @@ const REJECT_CLASSES = [
 ]
 
 const REJECT_MAP = [
+  // Bu dort kural BURADA durmali, dosyanin sonundaki ek blokta degil: vakalar
+  // ust duzey kodda sirayla degerlendiriliyor ve canonInt/textDigest vakalari
+  // o bloktan ONCE siniflandiriliyor. Gec eklenen bir kural onlar icin yok
+  // sayilir; sonuc, dogru reddedilen bir cagrinin "siniflandirilamaz" gorunmesi.
+  { group: 'digest.scalar', match: 'desteklenmeyen tamsayi turu', class: 'bad-type' },
+  { group: 'digest.text', match: 'gecersiz bos metin', class: 'bad-format' },
+  { group: 'value-documents', match: "belge bileseni '|' iceremez", class: 'not-injective' },
+  { group: 'builder', match: 'feeAmount zorunlu', class: 'bad-type' },
   { group: 'digest.amount', match: 'kayipsiz cevrilemedi', class: 'precision-loss' },
   { group: 'digest.amount', match: 'bandin disinda', class: 'out-of-range' },
   { group: 'digest.amount', match: 'Number olarak verilemez', class: 'bad-type' },
@@ -1587,6 +1595,7 @@ C({
   args: [A.bool(true)],
   expect: { reject: { class: 'bad-type' } },
   decision: 'D9',
+  expectDivergence: false,
   divergenceReason: 'JS coerces true to 1n and returns i:1:1 instead of rejecting.',
   tags: ['reject', 'normative'],
 })
@@ -1853,6 +1862,7 @@ C({
   args: [A.text(' 1.5')],
   expect: { reject: { class: 'bad-format' } },
   decision: 'G03-whitespace',
+  expectDivergence: false,
   divergenceReason: 'JS calls String.trim() before matching the decimal grammar and accepts the value.',
   tags: ['amount', 'reject', 'normative'],
 })
@@ -2004,6 +2014,7 @@ C({
   args: [A.text('')],
   expect: { reject: { class: 'bad-format' } },
   decision: 'D7',
+  expectDivergence: false,
   divergenceReason: 'JS returns the sha256 of the empty byte string instead of refusing.',
   tags: ['digest', 'reject', 'normative'],
 })
@@ -3128,6 +3139,7 @@ C({
   args: [A.text('REPORT_ORDER')],
   expect: { value: A.text('committedAtMicros ascending, then cycleId ascending by Unicode code point') },
   decision: 'D11',
+  expectDivergence: false,
   divergenceReason: 'The shipped constant does not name a collation.',
   tags: ['constants', 'order', 'normative'],
 })
@@ -3167,6 +3179,7 @@ C({
   args: [A.text(cp(0x1F3AE).repeat(64))],
   expect: { value: A.text(cp(0x1F3AE).repeat(64)) },
   decision: 'D2',
+  expectDivergence: false,
   divergenceReason: 'JS uses cycleId.length, a UTF-16 unit count, instead of a code-point count.',
   tags: ['identity', 'boundary', 'normative', 'unicode'],
 })
@@ -3510,6 +3523,7 @@ C({
   // value the SHIPPED strict parser produces for the same instant.
   expect: { text: textPin(canonTimeMicrosBig(SUBMS_MICROS)) },
   decision: 'D3',
+  expectDivergence: false,
   divergenceReason: 'toMicros parses through Date.parse, which is millisecond precision.',
   tags: ['games', 'time', 'normative'],
 })
@@ -3922,6 +3936,7 @@ C({
   args: [tradeArg({ tradeId: 't-4', maker: 'maker-party', taker: 'taker-party', expiresAt: '2026-08-30T00:00:00Z', legs: TRADE_LEGS, meta: [['note', 'a|b']] })],
   expect: { reject: { class: 'not-injective' } },
   decision: 'D8',
+  expectDivergence: false,
   divergenceReason: 'tradeDocument joins the value straight in, producing a document that reads as having one more component.',
   tags: ['trade', 'document', 'reject', 'normative'],
 })
@@ -4414,6 +4429,7 @@ C({
   args: [A.json({ ...COMMIT_BASE, feeAmount: undefined, cycleId: 'tw-no-fee', commandId: 'commit-no-fee' })],
   expect: { reject: { class: 'bad-type' } },
   decision: 'D10',
+  expectDivergence: false,
   divergenceReason: 'buildCommitCommands writes feeAmount: "undefined" into the terms.',
   tags: ['builder', 'reject', 'normative'],
 })
@@ -4894,11 +4910,11 @@ for (const g of GOLDEN_CHECKS) {
 //    that is the shape D4, D5 and D6 had while claiming Python went red on
 //    them, which no case could contradict because there were none.
 const DECISIONS = [
-  { id: 'D1', title: 'Report order breaks ties by Unicode code point', goesRed: ['javascript'],
+  { id: 'D1', title: 'Report order breaks ties by Unicode code point', goesRed: [],
     rationale: 'localeCompare is locale- and ICU-version-dependent and String::compareTo is UTF-16 code-unit order, so two honest implementations publish different Merkle roots over the same cycles.' },
-  { id: 'D2', title: 'The cycleId length limit is 64 CODE POINTS', goesRed: ['javascript'],
+  { id: 'D2', title: 'The cycleId length limit is 64 CODE POINTS', goesRed: [],
     rationale: 'Daml T.length counts code points, so the ledger accepts an id the JavaScript check refuses, and the auditor path breaks on a cycle already on the ledger.' },
-  { id: 'D3', title: 'An ISO to micros conversion on a document path is microsecond-exact', goesRed: ['javascript'],
+  { id: 'D3', title: 'An ISO to micros conversion on a document path is microsecond-exact', goesRed: [],
     rationale: 'Java Instant keeps micros while JavaScript canonTime routes through Date.parse; the Trade Wars golden uses a whole second so nothing catches it today.' },
   { id: 'D4', title: 'A native binary float is refused as an amount', goesRed: [],
     governs: ['amount-native-float-rejected', 'amount-native-float-half-rejected'],
@@ -4909,15 +4925,15 @@ const DECISIONS = [
   { id: 'D6', title: 'Every client enforces the ASCII field-name rule', goesRed: [],
     governs: ['field-name-rejected-non-ascii', 'field-name-rejected-astral'],
     rationale: 'The ASCII restriction is what makes the field sort identical across Daml sortOn, Python sorted and JavaScript Array.sort.' },
-  { id: 'D7', title: 'textDigest of the empty string is refused', goesRed: ['javascript'],
+  { id: 'D7', title: 'textDigest of the empty string is refused', goesRed: [],
     rationale: "Daml's toHex of an empty string is a runtime error, so a client returning e3b0c442 computes a value the ledger never can." },
-  { id: 'D8', title: 'v1 trade and transfer documents refuse a pipe in any component', goesRed: ['javascript'],
+  { id: 'D8', title: 'v1 trade and transfer documents refuse a pipe in any component', goesRed: [],
     rationale: 'The format has no length prefixes, so a pipe inside a value silently reshapes the document.' },
-  { id: 'D9', title: 'canonInt of a native boolean is refused', goesRed: ['javascript'],
+  { id: 'D9', title: 'canonInt of a native boolean is refused', goesRed: [],
     rationale: "Python's str(True) yields i:4:True and JavaScript's BigInt(true) yields i:1:1." },
-  { id: 'D10', title: 'Cycle builders refuse a missing fee amount', goesRed: ['javascript'],
+  { id: 'D10', title: 'Cycle builders refuse a missing fee amount', goesRed: [],
     rationale: 'Bare String() serialisation sends the literal text undefined to the ledger.' },
-  { id: 'D11', title: 'REPORT_ORDER names its collation', goesRed: ['javascript'],
+  { id: 'D11', title: 'REPORT_ORDER names its collation', goesRed: [],
     rationale: 'The current string names no collation, which is the root of D1.' },
   { id: 'D12', title: 'amountUnits is lossless-or-reject, so it has no rounding direction', goesRed: [],
     governs: ['amount-sub-unit-precision-loss', 'amount-eleven-fractional-nonzero'],
@@ -4926,7 +4942,7 @@ const DECISIONS = [
       'unless the value divides back exactly, and JavaScript and Python check the digits past the tenth before scaling. ' +
       'Stating the direction would be pinning dead code; what is normative is the refusal, so that is what is pinned. A ' +
       'port that rounds rather than refuses makes the direction observable and turns this decision red.' },
-  { id: 'G03-whitespace', title: 'An amount with surrounding whitespace is refused', goesRed: ['javascript'],
+  { id: 'G03-whitespace', title: 'An amount with surrounding whitespace is refused', goesRed: [],
     rationale: 'JavaScript trims before matching while Daml does not, so a padded field is accepted by one client and refused by another.' },
 ]
 const ALL_CASE_IDS = new Set(ALL_CASES.map((c) => c.id))
