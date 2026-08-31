@@ -6,10 +6,11 @@ something.** Gameplay stays in the game's own database; what reaches the ledger
 is custody of value and the settlement that resolves it.
 
 Assets follow [CIP-0056](https://lists.sync.global/g/cip-discuss), the Canton
-Network Token Standard — `HoldingV1`, `AllocationV1`, `TransferInstructionV1`.
+Network Token Standard — `HoldingV1`, `AllocationV1`, `TransferInstructionV1`,
+and since 1.6.0 `AllocationV2` for committed allocations.
 
-    package     arccade-game-sdk 1.5.0
-    hash        a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a
+    package     arccade-game-sdk 1.6.0
+    hash        edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a
     Daml SDK    3.4.10 (LF 2.1)
     network     vetted on Canton TestNet, settling real Canton Coin.
                 Earlier versions stay vetted alongside it, so nothing

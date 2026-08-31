@@ -11,6 +11,7 @@ import DA.Text qualified as T
 
 import Splice.Api.Token.HoldingV1 qualified as Holding
 import Splice.Api.Token.AllocationV1 qualified as Allocation
+import Splice.Api.Token.AllocationV2 qualified as AllocationV2
 
 -- | Degerin nasil tutuldugu.
 --
@@ -23,8 +24,15 @@ import Splice.Api.Token.AllocationV1 qualified as Allocation
 -- tek basina parayi oynatamaz, sure dolunca oyuncu @OwnerExpireLockV2@ ile
 -- arCCade'e de DSO'ya da ihtiyac duymadan parasina doner.
 --
--- @TokenAllocation@ tipte duruyor ama fail-closed: custody dogrulamasi bu
--- mekanikle cagrilirsa reddeder. Sinir simdiden kesilmis olsun diye var.
+-- @TokenAllocation@ ARTIK CANLI, ama yalnizca V2 ve yalnizca @committed@ ise.
+-- Yukaridaki V1 gerekcesi hala dogrudur ve V1 icin gecerlidir; V2 tam olarak o
+-- bosluğu kapatir. Splice'in kendi dokumani (AllocationV2, @Allocation_Withdraw@):
+-- "For committed allocations (committed set to True), this choice can only be
+-- exercised once the settlement deadline has passed." Yani committed bir
+-- allocation, deadline'a kadar gonderenin tek basina cikamadigi bir kilittir —
+-- V1'de olmayan sey buydu.
+--
+-- Mekanik seciminin kendisi hala venue'nundur; SDK ikisini de dogrular.
 data CustodyMechanic
   = TimeLockedHolding
   | TokenAllocation

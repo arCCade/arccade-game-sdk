@@ -1,0 +1,118 @@
+-- | Committed V2 allocation'in custody kaniti olarak dogrulanmasi.
+--
+-- Bu dosyanin varlik sebebi: 1.5.0'a kadar @TokenAllocation@ fail-closed'di ve
+-- gerekcesi V1'in @Allocation_Withdraw@'ini tek basina gonderene birakmasiydi.
+-- V2'nin @committed@ alani o boslugu kapatir. Testler kabulden cok REDDI
+-- pinler — cunku mekanigi kilit yapan sey, reddedilen durumlardir.
+module Test.GameSdk.CustodyAllocationTest where
+
+import Daml.Script
+import DA.Time (time)
+import DA.Date (date, Month(Jan))
+
+import Splice.Api.Token.HoldingV1 qualified as Holding
+
+import ArCCade.GameSdk.Custody
+import ArCCade.GameSdk.Types
+
+import Test.GameSdk.Fixture
+import Test.GameSdk.Mocks
+
+lockExpiry : Time
+lockExpiry = time (date 2026 Jan 2) 0 0 0
+
+tag : Text
+tag = "arccade-game-sdk:1:tw-1:aa"
+
+instr : Party -> Holding.InstrumentId
+instr admin = Holding.InstrumentId with admin; id = "Amulet"
+
+-- | Varsayilan: dogrulanmasi gereken saglikli allocation.
+mkAlloc : Parties -> (MockAllocation -> MockAllocation) -> Script (ContractId MockAllocation)
+mkAlloc p tweak = do
+  let base = MockAllocation with
+        registry = p.registry
+        authorizer = p.player
+        counterparty = p.venue
+        admin = p.registry
+        instrumentId = "Amulet"
+        amount = 30.0
+        committed = True
+        settlementDeadline = Some lockExpiry
+        transferLegId = tag
+  submitMulti [p.registry, p.player] [] do createCmd (tweak base)
+
+-- | Dogrulamayi calistirir. Venue okuyan taraf olmali: allocation'i cekebilmesi
+-- icin gorunur olmasi gerekir, tipki kilitli holding'de oldugu gibi.
+runVerify : Parties -> ContractId MockAllocation -> Script ()
+runVerify p cid =
+  submitMulti [p.venue] [p.registry, p.player] do
+    createAndExerciseCmd (VerifyProbe with venue = p.venue) (RunVerify with
+      player = p.player
+      instrumentId = instr p.registry
+      stakeAmount = 30.0
+      lockExpiresAt = lockExpiry
+      custodyTag = tag
+      allocCid = toInterfaceContractId cid)
+
+-- | Ayni cagri, ama REDDEDILMESI bekleniyor. submitMultiMustFail kullaniliyor:
+-- Script'in kendi araci, ve testin yanlis sebeple gecmesini engeller.
+runVerifyFails : Parties -> ContractId MockAllocation -> Script ()
+runVerifyFails p cid =
+  submitMultiMustFail [p.venue] [p.registry, p.player] do
+    createAndExerciseCmd (VerifyProbe with venue = p.venue) (RunVerify with
+      player = p.player
+      instrumentId = instr p.registry
+      stakeAmount = 30.0
+      lockExpiresAt = lockExpiry
+      custodyTag = tag
+      allocCid = toInterfaceContractId cid)
+
+testAcceptsCommitted : Script ()
+testAcceptsCommitted = do
+  p <- allocParties
+  cid <- mkAlloc p identity
+  runVerify p cid
+
+-- Reddedilmesi gerekenler. Her biri mekanigin kilit olmasinin bir sartidir.
+
+testRefusesUncommitted : Script ()
+testRefusesUncommitted = do
+  p <- allocParties
+  -- committed olmayan allocation: oyuncu istedigi an cikabilir. V1'i
+  -- reddetme gerekcemizin aynisi, bu kez V2 icinde.
+  cid <- mkAlloc p (\a -> a with committed = False)
+  runVerifyFails p cid
+
+testRefusesNoDeadline : Script ()
+testRefusesNoDeadline = do
+  p <- allocParties
+  -- Deadline yoksa "deadline'a kadar committed" hic bitmez: oyuncunun parasi
+  -- venue hic settle etmezse sonsuza kadar bagli kalir.
+  cid <- mkAlloc p (\a -> a with settlementDeadline = None)
+  runVerifyFails p cid
+
+testRefusesShortDeadline : Script ()
+testRefusesShortDeadline = do
+  p <- allocParties
+  cid <- mkAlloc p (\a -> a with settlementDeadline = Some (time (date 2026 Jan 1) 0 0 0))
+  runVerifyFails p cid
+
+testRefusesWrongTag : Script ()
+testRefusesWrongTag = do
+  p <- allocParties
+  -- Etiketsiz bir allocation baska bir dongude ikinci kez kullanilabilirdi.
+  cid <- mkAlloc p (\a -> a with transferLegId = "baska-dongu")
+  runVerifyFails p cid
+
+testRefusesWrongAmount : Script ()
+testRefusesWrongAmount = do
+  p <- allocParties
+  cid <- mkAlloc p (\a -> a with amount = 29.0)
+  runVerifyFails p cid
+
+testRefusesWrongCounterparty : Script ()
+testRefusesWrongCounterparty = do
+  p <- allocParties
+  cid <- mkAlloc p (\a -> a with counterparty = p.operator)
+  runVerifyFails p cid

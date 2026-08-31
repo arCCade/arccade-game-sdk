@@ -13,6 +13,7 @@
 module ArCCade.GameSdk.Custody where
 
 import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.AllocationV2 qualified as AllocationV2
 
 import ArCCade.GameSdk.Types
 
@@ -55,6 +56,75 @@ verifyLockedHolding player venue instrumentId stakeAmount lockExpiresAt custodyT
       -- yalnizca abort edilebilir ve abort'lar ayrica sayilir.
       assertMsg "kilit baglami bu dongunun custody etiketi degil"
         (lk.context == Some custodyTag)
+
+-- | Committed bir V2 allocation'i custody kaniti olarak dogrular.
+--
+-- Neden V2 kabul edilebilir de V1 degil: V1'de @Allocation_Withdraw@'in
+-- controller'i tek basina gonderendir, yani oyuncu istedigi an cikabilir ve o
+-- bir kilit degil rezervasyondur. V2'de @committed@ alani vardir ve Splice'in
+-- dokumani sunu soyler: committed bir allocation icin ayni choice ANCAK
+-- settlement deadline gectikten sonra kullanilabilir. Kilit ozelligini veren
+-- tek sey budur; asagidaki ilk kontrol de bu yuzden ilktir.
+verifyCommittedAllocation
+  :  Party                          -- ^ oyuncu (allocation'i yetkilendiren olmali)
+  -> Party                          -- ^ venue (bacagin karsi tarafi olmali)
+  -> Holding.InstrumentId           -- ^ beklenen enstruman
+  -> Decimal                        -- ^ stake tutari
+  -> Time                           -- ^ anlasilan kilit bitisi
+  -> Text                           -- ^ bu dongunun custody etiketi
+  -> ContractId AllocationV2.Allocation
+  -> Update ()
+verifyCommittedAllocation player venue instrumentId stakeAmount lockExpiresAt custodyTag cid = do
+  a <- fetch cid
+  let v = view a
+      spec = v.allocation
+
+  -- 1. Kilit ozelliginin TAMAMI bu alanda. committed olmayan bir allocation
+  --    oyuncunun istedigi an cikabilecegi bir rezervasyondur ve custody diye
+  --    sunulmasi V1'i reddetme gerekcemizle celisirdi.
+  assertMsg "allocation committed degil: gonderen istedigi an cikabilir, bu kilit degildir"
+    spec.committed
+
+  -- 2. Deadline ZORUNLU. "committed, deadline'a kadar" ifadesinin deadline'i
+  --    yoksa cikis hic acilmaz: venue hic settle etmezse oyuncunun parasi
+  --    sonsuza kadar baglanir. Optional olmasi standardin esnekligidir; bir
+  --    oyun stake'i icin kabul edilebilir degil.
+  case spec.settlementDeadline of
+    None ->
+      abort "committed allocation'da settlement deadline yok: cikis hic acilmaz"
+    Some deadline ->
+      -- Deadline, uzerinde anlasilan kilit penceresini KAPSAMALI. Daha erken
+      -- bir deadline, settlement hakkinin dongu bitmeden dusmesi demektir.
+      assertMsg "settlement deadline anlasilan kilit bitisinden once"
+        (deadline >= lockExpiresAt)
+
+  -- 3. Yetkilendiren gercekten oyuncu olmali. @owner@ Optional'dir ve @None@
+  --    enstruman admin'inin yonettigi ozel hesaplara ayrilmistir; onu kabul
+  --    etmek sahipsiz bir hesaba karsi custody dogrulamak olurdu.
+  assertMsg "allocation'i yetkilendiren oyuncu degil"
+    (spec.authorizer.owner == Some player)
+
+  -- 4. Enstrumanin admin'i, entitlement'in tasidigi enstrumanla ayni olmali.
+  assertMsg "allocation enstrumaninin admin'i beklenenle eslesmiyor"
+    (spec.admin == instrumentId.admin)
+
+  -- 5. TEK bacak. Cok bacakli bir allocation'da hangi bacagin stake oldugu
+  --    burada anlasilmaz; belirsizligi kabul etmektense reddediyoruz.
+  case spec.transferLegSides of
+    [leg] -> do
+      assertMsg "allocation bacagi stake tutarini tasimiyor"
+        (leg.amount == stakeAmount)
+      assertMsg "allocation bacagi beklenen enstrumanda degil"
+        (leg.instrumentId == instrumentId.id)
+      -- Etiket, allocation'i bu dongunun kimligine ve giris commitment'ine
+      -- baglar — @TimeLockedHolding@'de kilidin @context@'inin yaptigi isin
+      -- aynisi. Bagsiz bir allocation baska bir dongude ikinci kez kullanilabilirdi.
+      assertMsg "bacak kimligi bu dongunun custody etiketi degil"
+        (leg.transferLegId == custodyTag)
+      assertMsg "bacagin karsi tarafi venue degil"
+        (leg.otherside.owner == Some venue)
+    _ ->
+      abort "allocation tek bacakli degil: hangi bacagin stake oldugu belirsiz"
 
 -- | Custody mekanigine gore dogrulamayi yonlendirir.
 --

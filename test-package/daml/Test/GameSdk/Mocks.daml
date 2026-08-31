@@ -11,7 +11,13 @@
 module Test.GameSdk.Mocks where
 
 import Splice.Api.Token.HoldingV1 qualified as Holding
+import Splice.Api.Token.HoldingV2 qualified as HoldingV2
+import Splice.Api.Token.AllocationV2 qualified as AllocationV2
 import Splice.Api.Token.MetadataV1 qualified as Metadata
+
+import ArCCade.GameSdk.Custody (verifyCommittedAllocation)
+import DA.Time (time)
+import DA.Date (date, Month(Jan))
 
 template MockLockedHolding
   with
@@ -57,3 +63,104 @@ template MockFreeHolding
         amount
         lock = None
         meta = Metadata.emptyMetadata
+
+-- | Committed bir V2 allocation'in aynasi.
+--
+-- Aynalanan sey: @AllocationSpecification@'in custody icin anlam tasiyan
+-- alanlari — @committed@, @settlementDeadline@, @authorizer@ ve tek transfer
+-- bacagi. Gercek allocation'i registry yaratir; burada onemli olan VIEW'in
+-- sekli, cunku @verifyCommittedAllocation@ yalnizca view'i okur.
+--
+-- @committed@ ve @settlementDeadline@ parametre birakildi ki testler ikisinin
+-- de yokluguna karsi kolu surebilsin: bu iki alan mekanigin kilit olmasinin
+-- TEK sebebidir ve reddedildiklerini gormek, kabul edildiklerini gormekten
+-- daha degerlidir.
+template MockAllocation
+  with
+    registry : Party
+    authorizer : Party
+    counterparty : Party
+    admin : Party
+    instrumentId : Text
+    amount : Decimal
+    committed : Bool
+    settlementDeadline : Optional Time
+    transferLegId : Text
+  where
+    signatory registry, authorizer
+    observer counterparty
+
+    interface instance AllocationV2.Allocation for MockAllocation where
+      view = AllocationV2.AllocationView with
+        -- Settlement bilgisi custody dogrulamasinin okumadigi kisimdir; view'in
+        -- eksiksiz olmasi icin doldurulur. Anlam tasiyan alanlar asagidaki
+        -- @allocation@ icindedir.
+        settlement = AllocationV2.SettlementInfo with
+          executors = [counterparty]
+          id = transferLegId
+          cid = None
+          meta = Metadata.emptyMetadata
+        allocation = AllocationV2.AllocationSpecification with
+          admin
+          authorizer = HoldingV2.Account with
+            provider = Some registry
+            owner = Some authorizer
+            id = ""
+          transferLegSides =
+            [ AllocationV2.TransferLegSide with
+                transferLegId
+                side = AllocationV2.SenderSide
+                otherside = HoldingV2.Account with
+                  provider = Some registry
+                  owner = Some counterparty
+                  id = ""
+                amount
+                instrumentId
+                meta = Metadata.emptyMetadata
+            ]
+          settlementDeadline
+          nextIterationFunding = None
+          committed
+          meta = Metadata.emptyMetadata
+        holdingCids = []
+        createdAt = time (date 2026 Jan 1) 0 0 0
+        expiresAt = settlementDeadline
+        numIterations = 0
+        availableActions = mempty
+        originalAllocationCid = None
+        meta = Metadata.emptyMetadata
+
+      -- Arayuzun geri kalani. @verifyCommittedAllocation@ YALNIZCA view'i
+      -- okur, dolayisiyla bu metodlar testlerde hic cagrilmaz; abort ile
+      -- birakildilar ki yanlislikla cagrilirlarsa sessizce bir sey uydurmak
+      -- yerine testi dusursunler.
+      allocation_settleImpl _ _ = abort "mock: settle cagrilmamali"
+      allocation_cancelImpl _ _ = abort "mock: cancel cagrilmamali"
+      allocation_withdrawImpl _ _ = abort "mock: withdraw cagrilmamali"
+      allocation_settleExtraObservers _ = []
+      allocation_cancelExtraObservers _ = []
+      allocation_withdrawExtraObservers _ = []
+
+-- | Custody dogrulamasini bir choice icinden kosturur.
+--
+-- @verifyCommittedAllocation@ bir @Update@'tir; Daml Script onu dogrudan
+-- cagiramaz. Gercek kullanimda ayni cagri @GameStake_Settle@'in govdesinden
+-- yapilir, yani probe o baglami taklit eder: venue exercise eder ve
+-- allocation'i cekebilmek icin okuyan taraflarda bulunur.
+template VerifyProbe
+  with
+    venue : Party
+  where
+    signatory venue
+
+    choice RunVerify : ()
+      with
+        player : Party
+        instrumentId : Holding.InstrumentId
+        stakeAmount : Decimal
+        lockExpiresAt : Time
+        custodyTag : Text
+        allocCid : ContractId AllocationV2.Allocation
+      controller venue
+      do verifyCommittedAllocation player venue instrumentId stakeAmount
+                                   lockExpiresAt custodyTag allocCid
