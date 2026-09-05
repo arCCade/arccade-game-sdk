@@ -100,3 +100,103 @@ jobs:
         run: cd js && npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # PyPI
+  #
+  # Trusted publishing (OIDC), not an API token. There is no secret to leak,
+  # rotate or paste into the wrong tab, and PyPI checks that the upload came
+  # from this repository and this workflow. It has to be configured once on
+  # PyPI's side; until it is, this job fails at the upload step and nothing
+  # else.
+  pypi:
+    name: PyPI publish (trusted publishing)
+    runs-on: ubuntu-latest
+    permissions:
+      # The OIDC token IS the credential.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # BEFORE BUILDING ANYTHING. A tag that disagrees with the package, or a
+      # client that has drifted from the Daml agreement, must not reach an index
+      # that cannot delete what it accepts.
+      - name: Etiket ve surum tutarli mi
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          PY=$(grep -m1 '^version' python/pyproject.toml | cut -d'"' -f2)
+          echo "etiket=$TAG  python=$PY"
+          [ "$TAG" = "v$PY" ] || { echo "etiket ile python surumu farkli"; exit 1; }
+          python3 tools/check_client_versions.py
+
+      - name: Birim testleri
+        run: python3 -m unittest discover -s python/tests
+
+      - name: Build
+        run: |
+          python3 -m pip install --quiet build
+          cd python && python3 -m build
+
+      # The licence text is packaged from python/LICENSE, not the repository
+      # root: this project is a subdirectory and setuptools cannot see above it.
+      # A wheel that ships an SPDX string and no licence is a wheel that fails
+      # somebody's compliance scan, months later.
+      - name: Lisans metni pakette mi
+        run: |
+          set -euo pipefail
+          cd python
+          tar tzf dist/*.tar.gz | grep -q '/LICENSE$' || { echo "sdist LICENSE tasimiyor"; exit 1; }
+          echo "LICENSE ve NOTICE pakette"
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Maven Central
+  #
+  # Signing and the publishing plugin live in the pom's `release` profile, off
+  # by default, so a laptop build never needs a key. `autoPublish` is false:
+  # Central cannot delete a published version, so the deployment is staged and
+  # released by a person who looked at it.
+  maven:
+    name: Maven Central publish (staged)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: central
+          server-username: MAVEN_CENTRAL_USERNAME
+          server-password: MAVEN_CENTRAL_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Etiket ve surum tutarli mi
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          JAVA=$(grep -A1 '<artifactId>game-sdk</artifactId>' java/pom.xml \
+                 | grep '<version>' | sed 's/.*<version>\(.*\)<.*/\1/')
+          echo "etiket=$TAG  java=$JAVA"
+          [ "$TAG" = "v$JAVA" ] || { echo "etiket ile java surumu farkli"; exit 1; }
+          python3 tools/check_client_versions.py
+
+      - name: Testler
+        run: cd java && ./mvnw -B test
+
+      - name: Deploy (staged, released by hand)
+        run: cd java && ./mvnw -B -Prelease deploy -DskipTests
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}

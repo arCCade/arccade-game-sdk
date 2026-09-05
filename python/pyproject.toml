@@ -30,6 +30,15 @@ Source = "https://github.com/arccade/arccade-game-sdk"
 
 [tool.setuptools]
 packages = ["arccade_game_sdk"]
+# SHIPPED, not just declared. Without this the wheel carries the SPDX string and
+# no licence text: the files sit at the repository root and this project is a
+# subdirectory, so setuptools never sees them — the copies beside this file are
+# what gets packaged. `js/` keeps its own copies for the same reason.
+#
+# Under [tool.setuptools], not [project]: `project.license-files` is PEP 639 and
+# needs setuptools 77+, while build-system here declares >=68. Raising that floor
+# to ship two text files would be the tail wagging the dog.
+license-files = ["LICENSE", "NOTICE"]
 
 [tool.setuptools.package-data]
 arccade_game_sdk = ["py.typed"]

@@ -27,6 +27,28 @@
     </license>
   </licenses>
 
+  <!--
+    REQUIRED BY MAVEN CENTRAL, not decoration. Its validator rejects a POM with
+    no <developers> and no <scm>, and it rejects it at upload — after the
+    signing, after the staging, at the last step. Both blocks exist so the first
+    publish is not the thing that discovers them.
+  -->
+  <developers>
+    <developer>
+      <name>arCCade</name>
+      <url>https://arccade.io</url>
+      <organization>arCCade</organization>
+      <organizationUrl>https://arccade.io</organizationUrl>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/arccade/arccade-game-sdk.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/arccade/arccade-game-sdk.git</developerConnection>
+    <url>https://github.com/arccade/arccade-game-sdk</url>
+    <tag>HEAD</tag>
+  </scm>
+
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -51,6 +73,15 @@
     <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
     <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
     <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
+
+    <!--
+      Release-only plugins, pinned for the same reason as the rest: an SDK whose
+      output is a commitment digest must not have its build move underneath it.
+    -->
+    <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
+    <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
+    <maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
+    <central-publishing-maven-plugin.version>0.7.0</central-publishing-maven-plugin.version>
   </properties>
 
   <dependencies>
@@ -108,4 +139,98 @@
       </plugin>
     </plugins>
   </build>
+
+  <!--
+    PUBLISHING LIVES IN A PROFILE, and is off by default.
+
+    Signing needs a private key. If the gpg plugin sat in the default build,
+    every `mvn test` on a laptop and every CI run would need one, and the usual
+    escape from that is `-Dgpg.skip=true` — which then rides along into the one
+    build where the signature was the point.
+
+    Sources and javadoc jars are here for a smaller reason: they are required by
+    Central and they are pure cost on every other build.
+
+      mvn -Prelease deploy
+  -->
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>${maven-source-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals><goal>jar-no-fork</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>${maven-javadoc-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals><goal>jar</goal></goals>
+              </execution>
+            </executions>
+            <configuration>
+              <!--
+                Javadoc's doclint fails a build on a missing @param. This
+                artifact documents its INVARIANTS in prose above each class,
+                which is where they belong, and a release must not be blocked
+                by a tag that adds nothing to a digest implementation.
+              -->
+              <doclint>none</doclint>
+              <quiet>true</quiet>
+            </configuration>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>${maven-gpg-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals><goal>sign</goal></goals>
+                <configuration>
+                  <!-- No TTY in CI: the passphrase arrives as a property. -->
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>${central-publishing-maven-plugin.version}</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <!--
+                MANUAL, not automatic. The first publish of a namespace is the
+                one that cannot be undone: Central has no delete. A staged
+                deployment can be inspected and dropped; an automatic one is
+                already public by the time anyone looks.
+              -->
+              <autoPublish>false</autoPublish>
+              <waitUntil>validated</waitUntil>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
