@@ -1,0 +1,22 @@
+{
+  "note": "The anchor that test-vectors/cycle-rows.json produces. It exists so tools/verify_period.py can be exercised end to end in CI against a period whose rows and root are already pinned elsewhere in this directory \u2014 a verifier nobody runs is a claim, not a check.",
+  "derivedFrom": "test-vectors/cycle-rows.json (rows, merkleRoot)",
+  "anchor": {
+    "venueId": "tradewars/testnet-arena-v2",
+    "periodId": "2026-09-04",
+    "periodStartMicros": 0,
+    "periodEndMicros": 1,
+    "cycleCount": 3,
+    "committedUnits": 1600000000000,
+    "feeUnits": 5200000000,
+    "returnedUnits": 1600000000000,
+    "forfeitedUnits": 0,
+    "payoutUnits": 0,
+    "qualifyingTxCount": 3,
+    "nonQualifyingTxCount": 0,
+    "merkleRootHex": "910a515e5aba2c177291fd253d1cb4dbba7a04878e65b0f8e6d0a2bb54705128",
+    "reportDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "prevAnchorDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "anchorDigest": "dfd1210cc863c2a5f427da40eb1daf2b9a2854a28c7dabb5807f015e2f1f8375"
+  }
+}

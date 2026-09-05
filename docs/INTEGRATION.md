@@ -756,15 +756,36 @@ python3 tools/check_package_id.py
 
 Named so you can plan around them rather than discover them.
 
-- **`anchorDocument` exists only in Daml.** No shipped client reproduces the
-  anchor digest; §5.4 is the workaround and it is fifteen lines you maintain.
+- **`anchorDocument` is in all four implementations.** Daml, JavaScript, Python
+  and Java each build it and each computes the same digest; the fifteen lines
+  §5.4 used to ask you to maintain are no longer yours to write.
 - **The Python reference is the digest and the report derivation, not the whole
   client.** It has no identifier validators, no command builders and no tenancy.
 - **The game adapters are not published** (§1). Your documents are yours to
   build from the `canon*` primitives.
-- **Report transport is yours.** There is no anchoring job, no report host and
-  no inclusion-proof endpoint in this repository — only the pieces they would be
-  built from, and the fixtures that pin them.
+- **Report transport is yours, but verification is not.** There is still no
+  anchoring job and no report host here: deciding when to anchor and where to
+  publish is an operational choice, not a library's. What used to be missing and
+  is not any more is the reader's half — `tools/verify_period.py` rebuilds a
+  period from ledger transaction trees, recomputes the root, the totals and the
+  anchor digest, and compares them against the anchor a venue published. It also
+  checks a single row's inclusion proof for someone who does not hold the whole
+  report.
+
+  Three modes, each giving up a different kind of trust:
+
+  ```bash
+  # trust nothing but the ledger stream
+  python3 tools/verify_period.py --transactions txs.json --anchor anchor.json
+  # trust the published rows, not the arithmetic
+  python3 tools/verify_period.py --rows rows.json --anchor anchor.json
+  # prove one cycle is in the report
+  python3 tools/verify_period.py --leaf row.json --proof proof.json --root <hex>
+  ```
+
+  It exits non-zero on any mismatch, and CI runs it against a pinned fixture
+  AND against a deliberately tampered anchor — a verifier that is green because
+  it accepts everything is worse than none.
 - **Conditional forfeiture of a locked stake is not expressible in two writes**
   (§4.4). The seam for allocation custody is cut — `CustodyMechanic`,
   `CustodyRef.AllocationRef`, `verifyCustody` failing closed on that branch —

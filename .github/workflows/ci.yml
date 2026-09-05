@@ -133,6 +133,35 @@ jobs:
       # ayrisirsa burasi kirilir.
       - name: Digest paritesi
         run: python3 tools/digest_reference.py
+      # BAGIMSIZ DOGRULAYICI, KENDI FIXTURE'INA KARSI.
+      #
+      # Ucuncu bir tarafin kosacagi arac budur; kosulmayan bir dogrulayici bir
+      # kontrol degil, bir iddiadir. Ham islem agaclarindan satirlari yeniden
+      # turetir, koku ve capayi kurar, ve pinlenmis capayla karsilastirir.
+      - name: Bagimsiz donem dogrulayicisi
+        run: |
+          python3 tools/verify_period.py \
+            --transactions test-vectors/cycle-trees.json \
+            --anchor test-vectors/period-anchor.json
+
+      # VE YALAN SOYLENDIGINDE DUSTUGU. Yesil bir dogrulayici, her seyi kabul
+      # ettigi icin de yesil olabilir.
+      - name: Dogrulayici bozuk bir capayi reddediyor mu
+        run: |
+          set -euo pipefail
+          python3 - <<'EOF'
+          import json, pathlib
+          d = json.loads(pathlib.Path('test-vectors/period-anchor.json').read_text())
+          d['anchor']['feeUnits'] = int(d['anchor']['feeUnits']) + 1
+          pathlib.Path('/tmp/tampered.json').write_text(json.dumps(d))
+          EOF
+          if python3 tools/verify_period.py \
+               --transactions test-vectors/cycle-trees.json \
+               --anchor /tmp/tampered.json; then
+            echo "dogrulayici degistirilmis bir capayi KABUL ETTI"; exit 1
+          fi
+          echo "reddetti, beklenen bu"
+
       - name: Agactan satir kurma paritesi
         run: python3 tools/cycle_audit_reference.py
 
