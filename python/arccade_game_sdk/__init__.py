@@ -81,6 +81,6 @@ from .games import (PIXEL_RACE_GAME_CODE, TRADE_WARS_GAME_CODE,
                     tw_allocation, tw_entry_digest, tw_entry_document,
                     tw_outcome_digest, tw_outcome_document, tw_price_point)
 
-__version__ = "1.5.1"
+__version__ = "1.6.0"
 
 __all__ = [name for name in dir() if not name.startswith("_")]

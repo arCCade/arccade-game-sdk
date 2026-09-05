@@ -730,11 +730,18 @@ the highest vetted version and does not go stale on upgrade. Two consequences:
   rather than silently reverting to the unenforced behaviour, and it bites at
   vetting time, not at adoption time. Plan `InitRoster` as part of the vetting.
 
-**The JavaScript client's MAJOR.MINOR tracks the Daml package; PATCH does not.**
-1.5.x of `@arccade/game-sdk` talks to 1.5.0 of the contracts. Letting them drift
-is how a client starts computing a digest the ledger will reject — which has
-already happened once, at 1.1.0 against a 1.5.0 ledger package, unnoticed
-because the only consumer was a local `file:` dependency.
+**Every client's MAJOR.MINOR tracks the Daml package; PATCH does not.**
+1.6.x of `@arccade/game-sdk`, `arccade-game-sdk` (PyPI) and `io.arccade:game-sdk`
+all talk to 1.6.0 of the contracts. Letting them drift is how a client starts
+computing a digest the ledger will reject — which has now happened twice: at
+1.1.0 against a 1.5.0 ledger package, unnoticed because the only consumer was a
+local `file:` dependency, and again when the package moved to 1.6.0 and three
+clients stayed on 1.5.x.
+
+**The rule is now checked, not just written.** `tools/check_client_versions.py`
+compares all three clients (and Python's second copy in `__init__.py`) against
+`daml.yaml` and fails the build on a mismatch; CI runs it beside the package-id
+check. A rule that only lives in prose is the rule that broke twice.
 
 **Check what you built is what was vetted:**
 

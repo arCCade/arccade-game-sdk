@@ -9,12 +9,12 @@
   },
   "sdk": {
     "package": "@arccade/game-sdk",
-    "version": "1.5.3",
+    "version": "1.6.0",
     "clientVersions": {
-      "javascript": "1.5.3",
-      "python": "1.5.1",
-      "java": "1.5.1",
-      "daml": "1.5.0"
+      "javascript": "1.6.0",
+      "python": "1.6.0",
+      "java": "1.6.0",
+      "daml": "1.6.0"
     },
     "entry": "./src/index.js",
     "resolvedThrough": "js/package.json exports[\".\"].import"
@@ -22097,7 +22097,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-syn-settle-1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -22110,7 +22110,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "stake-syn-settle-1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "syn-settle-1",
@@ -22141,7 +22141,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "stake-syn-settle-1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Settle",
                             "choiceArgument": {
                               "disposition": "ReturnedInFull",
@@ -22275,7 +22275,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-syn-abort",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "pixel-race-v1",
@@ -22288,7 +22288,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "stake-abort",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "syn-abort",
@@ -22319,7 +22319,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "stake-abort",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "player disconnected"
@@ -22449,7 +22449,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-syn-expire",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "pixel-race-v1",
@@ -22462,7 +22462,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "stake-expire",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "syn-expire",
@@ -22493,7 +22493,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "stake-expire",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_ExpireUnsettled",
                             "choiceArgument": {},
                             "consuming": true,
@@ -22621,7 +22621,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-syn-abort-2",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "pixel-race-v1",
@@ -22634,7 +22634,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "stake-a2",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "syn-abort-2",
@@ -22665,7 +22665,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "stake-a2",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -22718,7 +22718,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-syn-open",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -22731,7 +22731,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "stake-open",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "syn-open",
@@ -22823,7 +22823,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "stake-orphan",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Settle",
                             "choiceArgument": {
                               "disposition": "ReturnedInFull",
@@ -22911,7 +22911,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-syn-unlock-ok",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -22924,7 +22924,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "stake-syn-unlock-ok",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "syn-unlock-ok",
@@ -22955,7 +22955,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "stake-syn-unlock-ok",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Settle",
                             "choiceArgument": {
                               "disposition": "ReturnedInFull",
@@ -23025,7 +23025,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-syn-unlock-bad",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -23038,7 +23038,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "stake-syn-unlock-bad",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "syn-unlock-bad",
@@ -23069,7 +23069,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "stake-syn-unlock-bad",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Settle",
                             "choiceArgument": {
                               "disposition": "ReturnedInFull",
@@ -23193,7 +23193,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-syn-bad-disp",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -23206,7 +23206,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "stake-syn-bad-disp",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "syn-bad-disp",
@@ -23237,7 +23237,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "stake-syn-bad-disp",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Settle",
                             "choiceArgument": {
                               "disposition": "SomethingNew",
@@ -23633,7 +23633,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-B",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -23646,7 +23646,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s1a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "B",
@@ -23677,7 +23677,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s1a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -23700,7 +23700,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -23713,7 +23713,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s1b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "a",
@@ -23744,7 +23744,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s1b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -23801,7 +23801,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-c-1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -23814,7 +23814,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s2a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "c-1",
@@ -23845,7 +23845,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s2a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -23868,7 +23868,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-C-1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -23881,7 +23881,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s2b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "C-1",
@@ -23912,7 +23912,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s2b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -23969,7 +23969,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-x_1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -23982,7 +23982,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s3a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "x_1",
@@ -24013,7 +24013,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s3a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24036,7 +24036,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-x-1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24049,7 +24049,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s3b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "x-1",
@@ -24080,7 +24080,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s3b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24137,7 +24137,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-_z",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24150,7 +24150,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s4a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "_z",
@@ -24181,7 +24181,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s4a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24204,7 +24204,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-az",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24217,7 +24217,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s4b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "az",
@@ -24248,7 +24248,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s4b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24305,7 +24305,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-🎮",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24318,7 +24318,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s5a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "🎮",
@@ -24349,7 +24349,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s5a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24372,7 +24372,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-�",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24385,7 +24385,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s5b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "�",
@@ -24416,7 +24416,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s5b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24473,7 +24473,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-1a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24486,7 +24486,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s6a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "1a",
@@ -24517,7 +24517,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s6a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24540,7 +24540,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-a1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24553,7 +24553,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s6b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "a1",
@@ -24584,7 +24584,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s6b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24641,7 +24641,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-ab",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24654,7 +24654,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s7a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "ab",
@@ -24685,7 +24685,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s7a",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24708,7 +24708,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-abc",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24721,7 +24721,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "s7b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "abc",
@@ -24752,7 +24752,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "s7b",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24809,7 +24809,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-zzz",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24822,7 +24822,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "st1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "zzz",
@@ -24853,7 +24853,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "st1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24876,7 +24876,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-aaa",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24889,7 +24889,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "st2",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "aaa",
@@ -24920,7 +24920,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "st2",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -24975,7 +24975,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-zzz",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -24988,7 +24988,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "sm1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "zzz",
@@ -25019,7 +25019,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "sm1",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -25042,7 +25042,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "ent-aaa",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:PlayerEntitlement",
                             "choice": "Entitlement_Commit",
                             "choiceArgument": {
                               "gameCode": "trade-wars-v4",
@@ -25055,7 +25055,7 @@
                         {
                           "CreatedEvent": {
                             "contractId": "sm2",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "createArgument": {
                               "venueId": "tradewars/testnet-arena-v2",
                               "cycleId": "aaa",
@@ -25086,7 +25086,7 @@
                         {
                           "ExercisedEvent": {
                             "contractId": "sm2",
-                            "templateId": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a:ArCCade.GameSdk.Cycle:GameStake",
+                            "templateId": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a:ArCCade.GameSdk.Cycle:GameStake",
                             "choice": "GameStake_Abort",
                             "choiceArgument": {
                               "reason": "x"
@@ -39306,7 +39306,7 @@
     "packageNameReference": "#arccade-game-sdk",
     "packageNameReferenceResolvesTo": "the highest vetted version of arccade-game-sdk, chosen by the ledger at submission time",
     "source": "test-vectors/package-ids.json",
-    "sourceSha256": "588bb082c570e62639dceff25b7327ff1509ef7f14f081bb2cd875e7992c9f90",
+    "sourceSha256": "7f1ff29c50c648ccb4313bcc2d7a25ca8ff4cd0b783da3283a94c79c81b95f74",
     "participantCrossCheckedBy": "generate.mjs, when CONFORMANCE_PARTICIPANT_URL is set: every id below must be in GET /v2/packages",
     "referenced": [
       {
@@ -39315,8 +39315,8 @@
         "sites": "85"
       },
       {
-        "ref": "a0553775ff7b431dfdb8c92a3ae127638e124c02569e3cce22cc7a08aee2fb3a",
-        "is": "arccade-game-sdk 1.5.0",
+        "ref": "edb0af194381326861eb20da2e87d9698e9825172eb5ed3b4d381272dd811c3a",
+        "is": "arccade-game-sdk 1.6.0",
         "sites": "78"
       },
       {

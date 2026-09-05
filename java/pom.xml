@@ -6,7 +6,7 @@
 
   <groupId>io.arccade</groupId>
   <artifactId>game-sdk</artifactId>
-  <version>1.5.1</version>
+  <version>1.6.0</version>
   <packaging>jar</packaging>
 
   <name>arCCade Game SDK (Java)</name>

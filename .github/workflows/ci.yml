@@ -54,6 +54,14 @@ jobs:
       - name: Paket kimligi yayinlananla ayni mi
         run: python3 tools/check_package_id.py
 
+      # ISTEMCILER PAKETLE AYNI ANLASMADA MI.
+      #
+      # Kural INTEGRATION.md 7'de yaziyordu ve yalnizca yaziyordu; Daml paketi
+      # 1.6.0'a cikti, uc istemci 1.5.x'te kaldi ve kimse fark etmedi. Bir kayit
+      # yayinlandiktan sonra geri alinamaz, o yuzden kontrol yayindan ONCE.
+      - name: Istemci surumleri paketle hizali mi
+        run: python3 tools/check_client_versions.py
+
       - name: Daml testleri
         run: cd test-package && daml build && daml test
 

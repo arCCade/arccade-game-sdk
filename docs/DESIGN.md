@@ -16,8 +16,8 @@
 | `GameVenue_AnchorPeriod` | v1.5.0'da UYGULANDI, mutasyonla dogrulandi |
 | Java digest portu | UYGULANDI (`arccade-wallet-backend`, `com.arccade.wallet.gamesdk`) — `ArccadeDigest` + iki adaptor, altin vektorler 10/10; DURUM TABLOSU BU MADDEDE ESKIMISTI |
 | Java Merkle + denetim satiri | v1.5.0 ile eklendi: `ArccadeMerkle`, `PeriodAuditDocuments`, dort dil paritesi 9/9, mutasyonla dogrulandi |
-| Backend entegrasyonu (commitment/settlement yolu, Pixel Race stake-at-start) | **YAZILMADI** |
-| Canli custody (gercek `LockedAmulet`) | **KOSULMADI** — TestNet cuzdaninda 0 CC var; mekanik MainNet'te zaten calisiyor |
+| Backend entegrasyonu (commitment/settlement yolu, Pixel Race stake-at-start) | UYGULANDI. Trade Wars ve Pixel Race'in ikisi de imzali commit + imzali settle yolunda; oyuncu kendi unlock'unu imzaliyor, sunucu imzalamiyor. TestNet 5 Eyl 2026, MainNet 4 Eyl 2026 (Trade Wars). |
+| Canli custody (gercek `LockedAmulet`) | KOSULDU. TestNet'te ve MainNet'te ucdan uca: commit kilidi yaratir, settle onu ayni islemde acar. Eski not ("TestNet cuzdaninda 0 CC var") 2026-08 icindi ve gecti. |
 
 ## RAPOR SATIRLARINI AGACTAN KURMAK — NORMATIF (27 Agu 2026)
 
