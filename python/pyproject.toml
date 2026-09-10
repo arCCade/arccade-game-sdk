@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "arccade-game-sdk"
 version = "1.6.0"
 description = "Game-economy primitives for the Canton Network: canonical digests, Merkle audit proofs, cycle/trade/transfer command builders."
-readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
 authors = [{ name = "arCCade" }]

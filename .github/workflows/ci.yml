@@ -115,8 +115,9 @@ jobs:
           node-version: '20'
       - name: Tests
         run: cd js && npm test
-      # Paketin gercekten yayinlanabilir oldugunu ve README/LICENSE'in icinde
-      # gittigini gorur. `npm publish` sirasinda fark etmek gec olur.
+      # Paketin gercekten yayinlanabilir oldugunu ve LICENSE/NOTICE'in icinde
+      # gittigini gorur. `npm publish` sirasinda fark etmek gec olur. README
+      # artik bu depoda degil (arccade-docs), pakete de girmiyor.
       - name: Paketleme
         run: cd js && npm pack --dry-run
 
