@@ -79,6 +79,7 @@
     white-space:nowrap; border:1px solid transparent; }
   .chip.internal { background:var(--brass-bg); color:var(--brass); border-color:color-mix(in srgb,var(--brass) 32%,transparent); }
   .chip.tenant { background:var(--accent-bg); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 32%,transparent); }
+  .chip.player { background:transparent; color:var(--ink-2); border-color:var(--line-2); }
   .chip.dot::before { content:""; width:5px; height:5px; border-radius:50%; background:currentColor; }
 
   .ep { border:1px solid var(--line); border-radius:3px; background:var(--surface); margin:20px 0; overflow:hidden; }
@@ -136,7 +137,7 @@
   <nav class="rail">
     <div>
       <div class="rail-mark">ar<span>CC</span>ade Game SDK</div>
-      <div class="rail-ver">v1.3.0</div>
+      <div class="rail-ver">v1.6.0</div>
     </div>
     <div class="rail-group">
       <div class="rail-label">Orientation</div>
@@ -148,9 +149,11 @@
     <div class="rail-group">
       <div class="rail-label">Endpoints</div>
       <a href="#ep-tenants">Tenant admin</a>
+      <a href="#ep-venues">Venues &amp; audit</a>
       <a href="#ep-players">Players &amp; assets</a>
       <a href="#ep-trade">Trade</a>
       <a href="#ep-cycle">Cycle</a>
+      <a href="#ep-signed">Player-signed cycle</a>
     </div>
     <div class="rail-group">
       <div class="rail-label">Contracts</div>
@@ -176,13 +179,15 @@
         value reaches the ledger, and when it does it settles atomically.
       </p>
       <p class="muted" style="font-size:14px">
-        Base URL <code>https://sdk.arccade.io</code>. JSON in, JSON out. All amounts are strings.
+        Base URL <code>https://sdk.arccade.io</code>, running against Canton TestNet. JSON in, JSON
+        out. Send every amount as a decimal string.
       </p>
 
       <h2 id="model">What goes on-chain</h2>
       <p>
-        There is no endpoint that writes non-value data. This is a hard property of the API, not a
-        guideline: "record this score" does not exist, so it cannot be called, batched or abused.
+        There is no endpoint that writes game data. "Record this score" does not exist, so it cannot
+        be called, batched or abused. A cycle moves value twice: once when the stake is committed
+        and once when it is settled.
       </p>
       <div class="split">
         <div class="off">
@@ -201,8 +206,17 @@
             <li>Ownership changing hands</li>
             <li>Value transferred</li>
             <li>Assets minted and burned</li>
+            <li>One digest per audit period</li>
           </ul>
         </div>
+      </div>
+      <div class="note">
+        <span class="h">When the player signs with their own key</span>
+        Each of the two value writes is preceded by an offer contract that the platform creates and
+        the player accepts. Canton's interactive submission carries one command authorised by one
+        party, and a stake needs the player's funds plus the venue's authority in the same
+        transaction; the offer is how that authority reaches it. The offer holds no value. See
+        <a href="#ep-signed">Player-signed cycle</a>.
       </div>
 
       <h2 id="agents">Notes for agents</h2>
@@ -212,12 +226,13 @@
           <thead><tr><th>Question</th><th>Answer</th></tr></thead>
           <tbody>
             <tr><td>Are writes idempotent?</td><td>No. Retrying a 5xx may double-write. See <a href="#idempotency">Idempotency</a>.</td></tr>
-            <tr><td>Can I discover state?</td><td>Yes  -  <code>GET /assets/:party</code> and <code>GET /cycle/:updateId/outcome</code> are safe to poll.</td></tr>
-            <tr><td>Is there a dry run?</td><td>Yes  -  <code>POST /preflight</code> validates without spending quota or writing.</td></tr>
-            <tr><td>What is rate limited?</td><td>Writes only, per tenant. Response carries <code>X-Quota-Remaining</code> and <code>X-Quota-Reset</code>.</td></tr>
-            <tr><td>Do contract ids persist?</td><td>No. Any id you cache can be consumed by the next write. Re-read before use.</td></tr>
-            <tr><td>Are amounts floats?</td><td>Never. Send decimal strings; fractional JSON numbers are rejected.</td></tr>
-            <tr><td>What fails closed?</td><td>Namespace violations, quota, unknown parties, expired locks, digest mismatches.</td></tr>
+            <tr><td>Can I discover state?</td><td>Yes. <code>GET /assets/:party</code>, <code>GET /cycle/open/:party</code>, <code>GET /venue/entitlements/:party</code>, <code>GET /venues</code> and <code>GET /cycle/:updateId/outcome</code> cost no quota and are safe to poll.</td></tr>
+            <tr><td>Is there a dry run?</td><td><code>POST /preflight</code> checks instrument ids against isolation rules without writing. For whole cycles, run a dry-run venue.</td></tr>
+            <tr><td>What is rate limited?</td><td>Writes, per tenant. Write responses carry <code>X-Quota-Remaining</code> and <code>X-Quota-Reset</code>. A write that fails validation still counts.</td></tr>
+            <tr><td>Who signs a stake?</td><td>For a party hosted on the participant, the service submits. For a player holding their own key: prepare, have the wallet sign the hash, execute.</td></tr>
+            <tr><td>Do contract ids persist?</td><td>No. Any id you cache can be consumed by the next write, including a venue's. Re-read before use.</td></tr>
+            <tr><td>Are amounts floats?</td><td>Never. Send decimal strings. Numbers are converted with <code>String()</code>, and a float can print as <code>1e-7</code>, which the ledger rejects.</td></tr>
+            <tr><td>What fails closed?</td><td>Namespace violations, quota, unknown tenant parties, expired prepared requests, policy outside bounds, digest mismatches.</td></tr>
           </tbody>
         </table>
       </div>
@@ -228,7 +243,7 @@
       </div>
 
       <h2 id="auth">Authentication</h2>
-      <p>Two credentials. Neither can perform the other's operations.</p>
+      <p>Two credentials. Neither can perform the other's operations, with one exception noted below.</p>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th>Header</th><th>Held by</th><th>Scope</th></tr></thead>
@@ -236,7 +251,7 @@
             <tr>
               <td><span class="chip internal dot">X-Internal-Service-Key</span></td>
               <td>arCCade</td>
-              <td>Tenant lifecycle, quotas, registry and venue creation</td>
+              <td>Tenant lifecycle, mint rights, registry creation, venue policy changes</td>
             </tr>
             <tr>
               <td><span class="chip tenant dot">X-Arccade-Key</span></td>
@@ -253,9 +268,15 @@
         be enumerated.
       </p>
       <p>
+        <code>POST /venue/init</code> accepts either header. With a tenant key the venue must sit in
+        your namespace and its policy must stay inside arCCade's bounds; with the internal key both
+        checks are skipped.
+      </p>
+      <p>
         Because every tenant shares one registry admin, <strong>your namespace is the isolation
-        boundary</strong>. Instrument ids are always <code>yourgame/...</code>, checked at the API and
-        again in the contract. Shared assets such as Canton Coin carry no prefix.
+        boundary</strong>. Instrument ids are always <code>yourgame/...</code>, venue ids
+        <code>yourgame/...</code> or <code>dryrun-yourgame-...</code>, checked at the API and again in
+        the contract. Shared assets such as Canton Coin carry no prefix.
       </p>
 
       <h2 id="sequence">Call sequence</h2>
@@ -263,16 +284,16 @@
 
       <h3>Onboarding, once per tenant</h3>
       <ol class="seq">
-        <li><code>POST /registry/init</code> -&gt; <code>registryCid</code>. Once per deployment, by arCCade.</li>
+        <li><code>POST /registry/init</code> -&gt; <code>contractId</code>. Once per deployment, by arCCade.</li>
         <li><code>POST /tenants</code> -&gt; <code>secret</code>. Shown once. The tenant party must already exist.</li>
-        <li><code>POST /tenants/:id/mint-right</code> -&gt; grants minting with a quota.</li>
+        <li><code>POST /tenants/:id/mint-right</code> -&gt; <code>mintRightCid</code>. Only if you mint assets.</li>
         <li><code>POST /venue/init</code> -&gt; <code>venueCid</code>. Only if you run staked cycles.</li>
       </ol>
 
       <h3>Per player, once</h3>
       <ol class="seq">
-        <li><code>POST /players/account</code> -&gt; <code>accountCid</code>. The player signs here, and only here.</li>
-        <li><code>POST /venue/:cid/entitlements</code> -&gt; <code>entitlementCid</code>. Needed for cycles only.</li>
+        <li><code>POST /players/account</code> -&gt; <code>accountCid</code>. Needed for assets only.</li>
+        <li><code>POST /venue/:venueCid/entitlements</code> -&gt; one entitlement per slot. Needed for cycles only.</li>
       </ol>
 
       <h3>Marketplace trade</h3>
@@ -283,12 +304,35 @@
         <li><code>POST /trade/:cid/settle</code> -&gt; every leg executes in one transaction.</li>
       </ol>
 
-      <h3>Staked cycle</h3>
+      <h3>Staked cycle, player holds their own key</h3>
       <ol class="seq">
         <li>Compute <code>entryDigest</code> from your entry document before play begins.</li>
-        <li><code>POST /cycle/commit</code> -&gt; <code>stakeCid</code>. Consumes the player's slot.</li>
+        <li><code>POST /cycle/offer/prepare</code> -&gt; <code>requestId</code>, <code>preparedTransactionHash</code>.</li>
+        <li>The player's wallet signs the hash.</li>
+        <li><code>POST /cycle/offer/execute</code> -&gt; <code>stakeCid</code>, <code>lockedAmulet</code>. Write 1.</li>
         <li>Run the game. No calls.</li>
-        <li><code>POST /cycle/:cid/settle</code> -&gt; returns the slot. Fails before <code>minCycleSeconds</code>.</li>
+        <li><code>POST /cycle/:stakeCid/settle/offer/prepare</code> with <code>lockedHoldingCid</code> -&gt; <code>requestId</code>, <code>preparedTransactionHash</code>.</li>
+        <li>The player's wallet signs the hash.</li>
+        <li><code>POST /cycle/settle/execute</code> -&gt; <code>entitlementCid</code>. Write 2; the lock opens in the same transaction.</li>
+      </ol>
+
+      <h3>Staked cycle, party hosted on the participant</h3>
+      <ol class="seq">
+        <li><code>POST /cycle/commit</code> -&gt; <code>stakeCid</code>, <code>lockedAmulet</code>. Consumes the player's slot.</li>
+        <li>Run the game. No calls.</li>
+        <li><code>POST /cycle/:stakeCid/settle</code> with <code>lockedHoldingCid</code> -&gt; returns the slot. Fails before <code>minCycleSeconds</code>.</li>
+      </ol>
+      <p>
+        Either way, a cycle that cannot be settled has two exits: <code>POST /cycle/:stakeCid/abort</code>
+        before settlement, and <code>POST /cycle/:stakeCid/expire</code> once the lock has expired, which
+        the player authorises alone.
+      </p>
+
+      <h3>Audit period</h3>
+      <ol class="seq">
+        <li><code>GET /report/period</code> -&gt; <code>rows</code>, <code>leaves</code>, <code>merkleRoot</code> for cycles that closed in the period.</li>
+        <li><code>POST /venue/:venueCid/anchor</code> with those rows -&gt; <code>anchorCid</code>. Compare the returned <code>merkleRootHex</code> with your own.</li>
+        <li>Publish the report. Anyone can rebuild the root from the ledger stream and check it against the anchor.</li>
       </ol>
 
       <h2 id="ep-tenants">Tenant admin</h2>
@@ -297,41 +341,48 @@
     <div class="ep">
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/tenants</span><span class="spacer"></span><span class="chip internal dot">internal</span></div>
       <div class="ep-body">
-        <p class="muted" style="font-size:14px">Opens a tenant and returns its key once. The key is not stored and cannot be retrieved again.</p>
-<pre><code>{ <span class="c-key">"tenantId"</span>: <span class="c-str">"yourgame"</span>,        <span class="c-com">// [a-z0-9-], 3-32 chars</span>
-  <span class="c-key">"tenantParty"</span>: <span class="c-str">"yourgame::1220ab..."</span>,  <span class="c-com">// must already exist</span>
-  <span class="c-key">"maxWrites"</span>: <span class="c-str">60</span>, <span class="c-key">"quotaWindowSeconds"</span>: <span class="c-str">60</span> }
+        <p class="muted" style="font-size:14px">
+          Opens a tenant and returns its key once. The key is not stored and cannot be retrieved
+          again. <code>quotaWindowSeconds</code> and <code>maxWrites</code> are recorded, but the quota
+          actually enforced is the service-wide one in <a href="#limits">Enforced limits</a>.
+        </p>
+<pre><code>{ <span class="c-key">"tenantId"</span>: <span class="c-str">"yourgame"</span>,        <span class="c-com">// [a-z0-9-], 3-32 chars, no leading/trailing or double dash</span>
+  <span class="c-key">"tenantParty"</span>: <span class="c-str">"yourgame::1220ab..."</span>,  <span class="c-com">// must already exist on the participant</span>
+  <span class="c-key">"note"</span>: <span class="c-str">"optional"</span> }
 
-<span class="c-com">201 -&gt; { "tenantId", "tenantParty", "secret", "createdAt" }
-400 -&gt; tenantParty unknown to this participant
+<span class="c-com">201 -&gt; { "tenantId", "tenantParty", "quotaWindowSeconds", "maxWrites",
+        "suspended", "note", "createdAt", "secret" }
+400 -&gt; invalid tenantId, or tenantParty unknown to this participant
 409 -&gt; tenant already exists</span></code></pre>
       </div>
     </div>
 
     <div class="ep">
       <div class="ep-head"><span class="verb get">GET</span><span class="path">/api/game/tenants</span><span class="spacer"></span><span class="chip internal dot">internal</span></div>
-      <div class="ep-body"><p class="muted" style="font-size:14px">Lists tenants. Key hashes are never included in any response.</p></div>
+      <div class="ep-body"><p class="muted" style="font-size:14px">Lists tenants as <code>{ "tenants": [...] }</code>. Key hashes are never included in any response.</p></div>
     </div>
 
     <div class="ep">
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/tenants/:tenantId/rotate-key</span><span class="spacer"></span><span class="chip internal dot">internal</span></div>
-      <div class="ep-body"><p class="muted" style="font-size:14px">Issues a new key. The previous key stops working on the same call  -  there is no grace period.</p></div>
+      <div class="ep-body"><p class="muted" style="font-size:14px">Returns <code>{ "tenantId", "secret" }</code>. The previous key stops working on the same call  -  there is no grace period.</p></div>
     </div>
 
     <div class="ep">
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/tenants/:tenantId/suspend</span><span class="spacer"></span><span class="chip internal dot">internal</span></div>
       <div class="ep-body">
-        <p class="muted" style="font-size:14px">Blocks the tenant from acting. Players keep every asset they already own.</p>
-<pre><code>{ <span class="c-key">"suspended"</span>: <span class="c-str">true</span>, <span class="c-key">"reason"</span>: <span class="c-str">"under review"</span> }</code></pre>
+        <p class="muted" style="font-size:14px">Blocks the tenant from acting; its key then answers <code>403</code>. Players keep every asset they already own. Send <code>"suspended": false</code> to lift it.</p>
+<pre><code>{ <span class="c-key">"suspended"</span>: <span class="c-str">true</span>, <span class="c-key">"reason"</span>: <span class="c-str">"under review"</span> }
+
+<span class="c-com">200 -&gt; { "tenantId", "suspended" }</span></code></pre>
       </div>
     </div>
 
     <div class="ep">
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/tenants/:tenantId/mint-right</span><span class="spacer"></span><span class="chip internal dot">internal</span></div>
       <div class="ep-body">
-        <p class="muted" style="font-size:14px">Grants minting inside the tenant's namespace. Above the quota, minting needs explicit approval.</p>
+        <p class="muted" style="font-size:14px">Grants minting inside the tenant's namespace, limited by a quota enforced in the contract.</p>
 <pre><code>{ <span class="c-key">"registryCid"</span>: <span class="c-str">"00d37a98..."</span>,
-  <span class="c-key">"mintQuota"</span>: <span class="c-str">100</span>, <span class="c-key">"quotaWindowSeconds"</span>: <span class="c-str">3600</span> }
+  <span class="c-key">"mintQuota"</span>: <span class="c-str">100</span>, <span class="c-key">"quotaWindowSeconds"</span>: <span class="c-str">3600</span> }   <span class="c-com">// defaults shown</span>
 
 <span class="c-com">201 -&gt; { "tenantId", "mintRightCid", "updateId" }</span></code></pre>
       </div>
@@ -339,18 +390,134 @@
 
     <div class="ep">
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/registry/init</span><span class="spacer"></span><span class="chip internal dot">internal</span></div>
-      <div class="ep-body"><p class="muted" style="font-size:14px">Creates the ecosystem asset registry. Once per deployment. Returns <code>contractId</code>.</p></div>
+      <div class="ep-body"><p class="muted" style="font-size:14px">Creates the ecosystem asset registry. Once per deployment: a second call creates a second registry. Body <code>{ "registryId" }</code> is optional. Returns <code>{ "registryId", "contractId", "updateId" }</code>.</p></div>
+    </div>
+
+    <div class="prose"><h2 id="ep-venues">Venues &amp; audit</h2>
+      <p>A venue is where staked cycles run: it holds the policy every stake is checked against. Its contract id changes whenever entitlements are issued or its policy is updated.</p>
     </div>
 
     <div class="ep">
-      <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/venue/init</span><span class="spacer"></span><span class="chip internal dot">internal</span></div>
+      <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/venue/init</span><span class="spacer"></span><span class="chip tenant dot">tenant</span><span class="chip internal dot">internal</span></div>
       <div class="ep-body">
-        <p class="muted" style="font-size:14px">Creates a venue and its policy. Dry-run venues must be prefixed <code>dryrun-</code> and cannot charge fees or pay out.</p>
-<pre><code>{ <span class="c-key">"venueId"</span>: <span class="c-str">"yourgame-arena"</span>, <span class="c-key">"mode"</span>: <span class="c-str">"ModeLive"</span>,
+        <p class="muted" style="font-size:14px">
+          Creates a venue and its slot roster. A tenant's live venue id starts with
+          <code>yourgame/</code>; a dry-run venue id with <code>dryrun-yourgame-</code>. Dry-run venues
+          cannot charge fees or pay out, and live venues always require custody proof  -  both
+          enforced in the contract. Costs no quota.
+        </p>
+<pre><code>{ <span class="c-key">"venueId"</span>: <span class="c-str">"yourgame/arena"</span>, <span class="c-key">"mode"</span>: <span class="c-str">"ModeLive"</span>,      <span class="c-com">// default ModeDryRun</span>
   <span class="c-key">"gameCodes"</span>: [<span class="c-str">"yourgame-runner-v1"</span>],
-  <span class="c-key">"policy"</span>: { <span class="c-key">"minStakeAmount"</span>: <span class="c-str">"10.0"</span>, <span class="c-key">"minPlatformFee"</span>: <span class="c-str">"0.01"</span>,
-              <span class="c-key">"minLockSeconds"</span>: <span class="c-str">14400</span>, <span class="c-key">"minCycleSeconds"</span>: <span class="c-str">600</span>,
-              <span class="c-key">"cooldownSeconds"</span>: <span class="c-str">30</span>, <span class="c-key">"concurrencyLimit"</span>: <span class="c-str">1</span> } }</code></pre>
+  <span class="c-key">"policy"</span>: { <span class="c-key">"minStakeAmount"</span>: <span class="c-str">"10.0"</span>,   <span class="c-key">"maxStakeAmount"</span>: <span class="c-str">"100.0"</span>,
+              <span class="c-key">"minPlatformFee"</span>: <span class="c-str">"1.0"</span>,    <span class="c-key">"maxPayoutAmount"</span>: <span class="c-str">"100.0"</span>,
+              <span class="c-key">"minLockSeconds"</span>: <span class="c-str">"14400"</span>,  <span class="c-key">"maxLockSeconds"</span>: <span class="c-str">"691200"</span>,
+              <span class="c-key">"minCycleSeconds"</span>: <span class="c-str">"60"</span>,    <span class="c-key">"maxCycleSeconds"</span>: <span class="c-str">"7200"</span>,
+              <span class="c-key">"cooldownSeconds"</span>: <span class="c-str">"30"</span>,    <span class="c-key">"abortCooldownSeconds"</span>: <span class="c-str">"300"</span>,
+              <span class="c-key">"concurrencyLimit"</span>: <span class="c-str">"1"</span> },
+  <span class="c-key">"shardCapacity"</span>: <span class="c-str">64</span> }                              <span class="c-com">// instrumentId defaults to Canton Coin</span>
+
+<span class="c-com">201 -&gt; { "venueId", "mode", "shardCapacity", "venueCid", "updateId" }
+400 -&gt; dry-run venueId without "dryrun-", or policy outside bounds: { "violations": [...] }
+403 -&gt; venueId outside your namespace</span></code></pre>
+        <p class="muted" style="font-size:14px">
+          Send the whole policy. With a tenant key the omitted fields fall back to defaults that sit
+          below the bounds  -  <code>minLockSeconds</code> 60 and <code>minCycleSeconds</code> 10  -  and
+          the request is rejected. Bounds are listed in <a href="#limits">Enforced limits</a>.
+        </p>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb">PUT</span><span class="path">/api/game/venue/:venueId/policy</span><span class="spacer"></span><span class="chip internal dot">internal</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">
+          Changes a venue's policy. Only arCCade can call it: a tenant setting its own fee floor would
+          set it to zero. The path takes the venue id, not the contract id. Send only the fields that
+          change, plus <code>gameCodes</code> to replace that list. Bounds apply to this route even with
+          the internal key, and <code>minLockSeconds</code> must be at least <code>maxCycleSeconds</code>,
+          so a lock never expires before the claim window closes.
+        </p>
+<pre><code>{ <span class="c-key">"minPlatformFee"</span>: <span class="c-str">"1.0"</span> }
+
+<span class="c-com">200 -&gt; { "venueId", "previousCid", "venueCid", "policy", "updateId", "note" }
+404 -&gt; venue not found</span></code></pre>
+        <p class="muted" style="font-size:14px">
+          The change does not reach open cycles, which carry the policy they committed under, nor
+          entitlements already issued, which carry theirs. A new fee applies to entitlements issued
+          after the update.
+        </p>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb get">GET</span><span class="path">/api/game/venues</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">Your venues and their current contract ids. No quota cost. Read <code>venueCid</code> here before any call that takes it.</p>
+<pre><code><span class="c-com">200 -&gt; { "venues": [ { "venueCid", "venueId", "mode", "gameCodes",
+                       "sdkVersion", "concurrencyLimit", "rosterReady" } ] }</span></code></pre>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb get">GET</span><span class="path">/api/game/report/period?fromMicros=&amp;toMicros=</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">
+          Rebuilds the audit rows for your venues from the ledger's transaction stream. A cycle belongs
+          to the period in which it <strong>closed</strong>: <code>fromMicros &lt;= settledAtMicros &lt; toMicros</code>.
+          Settlements, aborts and expiries all close a cycle. No quota cost; a long period takes a while.
+        </p>
+<pre><code><span class="c-com">200 -&gt; { "fromMicros", "toMicros", "cycleCount", "merkleRoot",
+        "leaves": [ "&lt;64-char sha256&gt;", ... ],
+        "rows": [ { "cycleId", "player", "gameCode", "concurrencyIndex",
+                    "entryDigest", "outcomeDigest",
+                    "committedUnits", "feeUnits", "returnedUnits",
+                    "forfeitedUnits", "payoutUnits", "disposition",
+                    "committedAtMicros", "settledAtMicros", "custodyTag" } ] }
+400 -&gt; fromMicros and toMicros required, toMicros &gt; fromMicros</span></code></pre>
+        <p class="muted" style="font-size:14px">
+          Units are integer strings in 1e-10 of the instrument. <code>disposition</code> is a label:
+          <code>returned-in-full</code>, <code>returned-with-forfeit</code>, <code>forfeited-in-full</code>,
+          <code>aborted</code>, <code>expired-unsettled</code>.
+        </p>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/venue/:venueCid/anchor</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">
+          Anchors a period on the ledger. Send the rows from <code>GET /report/period</code> unchanged.
+          The contract recomputes the Merkle root, the anchor digest, the cycle count and the unit
+          totals from the rows; it does not verify <code>reportUri</code>, <code>reportDigest</code>,
+          <code>prevAnchorDigest</code> or the transaction counts, which you declare.
+        </p>
+<pre><code>{ <span class="c-key">"periodId"</span>: <span class="c-str">"2026-09-11"</span>,
+  <span class="c-key">"periodStartMicros"</span>: <span class="c-str">"1789084800000000"</span>, <span class="c-key">"periodEndMicros"</span>: <span class="c-str">"1789171200000000"</span>,
+  <span class="c-key">"rows"</span>: [ ... ],
+  <span class="c-key">"qualifyingTxCount"</span>: <span class="c-str">"42"</span>, <span class="c-key">"nonQualifyingTxCount"</span>: <span class="c-str">"0"</span>,
+  <span class="c-key">"reportUri"</span>: <span class="c-str">"https://yourgame.example/audit/2026-09-11.json"</span>,
+  <span class="c-key">"reportDigest"</span>: <span class="c-str">"&lt;64-char sha256&gt;"</span>, <span class="c-key">"prevAnchorDigest"</span>: <span class="c-str">"&lt;previous anchorDigest&gt;"</span> }
+
+<span class="c-com">201 -&gt; { "anchored": true, "anchorCid", "merkleRootHex", "anchorDigest",
+        "reportDigest", "reportUri", "cycleCount", "updateId" }
+200 -&gt; { "anchored": false, "reason", "anchorCid", ... }   // this period is already anchored
+400 -&gt; periodId missing, or an unknown disposition label</span></code></pre>
+        <p class="muted" style="font-size:14px">
+          One anchor per venue and period: an existing one is returned instead of a second write.
+          A large anchor can outlast the request and still land, so after a timeout read
+          <code>GET /venue/anchors</code> before retrying.
+        </p>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb get">GET</span><span class="path">/api/game/venue/anchors</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">Your venues' anchors, newest period first. No quota cost.</p>
+<pre><code><span class="c-com">200 -&gt; { "anchors": [ { "anchorCid", "venueId", "periodId",
+                        "periodStartMicros", "periodEndMicros", "cycleCount",
+                        "merkleRootHex", "anchorDigest", "prevAnchorDigest",
+                        "reportUri", "reportDigest" } ] }</span></code></pre>
       </div>
     </div>
 
@@ -358,7 +525,9 @@
 
     <div class="ep">
       <div class="ep-head"><span class="verb get">GET</span><span class="path">/api/game/whoami</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
-      <div class="ep-body"><p class="muted" style="font-size:14px">Confirms the key and returns your namespace and quota. No quota cost. Use it as a health check.</p></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">Confirms the key. Returns your tenant record without the key hash, plus <code>namespace</code> and the write quota as <code>{ "windowSeconds", "maxWrites" }</code>. No quota cost; use it as a health check.</p>
+      </div>
     </div>
 
     <div class="ep">
@@ -367,7 +536,7 @@
         <p class="muted" style="font-size:14px">Validates instrument ids against isolation rules. No quota, no ledger write.</p>
 <pre><code>{ <span class="c-key">"instrumentIds"</span>: [ { <span class="c-key">"admin"</span>: <span class="c-str">"reg::1220ee..."</span>, <span class="c-key">"id"</span>: <span class="c-str">"yourgame/gold"</span> } ] }
 
-<span class="c-com">200 -&gt; { "ok": true, "quotaRemaining", "quotaResetAt" }
+<span class="c-com">200 -&gt; { "ok": true, "tenantId", "quotaRemaining", "quotaResetAt" }
 403 -&gt; isolation violation, with the offending id named</span></code></pre>
       </div>
     </div>
@@ -375,7 +544,7 @@
     <div class="ep">
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/assets/validate</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
       <div class="ep-body">
-        <p class="muted" style="font-size:14px">Parses one instrument id and reports its shape.</p>
+        <p class="muted" style="font-size:14px">Parses one instrument id and reports its shape. Body <code>{ "instrumentId": { "admin", "id" } }</code>.</p>
 <pre><code><span class="c-com">200 -&gt; { "ok": true, "tenantId": "yourgame",
         "localId": "sword-of-dawn", "instanceId": "4a91c8f2",
         "assetClass": "unique" }</span></code></pre>
@@ -386,10 +555,11 @@
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/players/account</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
       <div class="ep-body">
         <p class="muted" style="font-size:14px">
-          Opens a player's asset account. This is the only call the player signs; afterwards the
-          registry can mint to them without a signature per reward.
+          Opens a player's asset account, after which the registry can mint to them without a
+          signature per reward. The service submits this on the player's behalf, so the player
+          party must be hosted on this participant.
         </p>
-<pre><code>{ <span class="c-key">"playerParty"</span>: <span class="c-str">"alice::1220ab..."</span>, <span class="c-key">"accountId"</span>: <span class="c-str">"alice-1"</span> }
+<pre><code>{ <span class="c-key">"playerParty"</span>: <span class="c-str">"alice::1220ab..."</span>, <span class="c-key">"accountId"</span>: <span class="c-str">"alice-1"</span> }   <span class="c-com">// accountId optional</span>
 
 <span class="c-com">201 -&gt; { "playerParty", "accountCid", "updateId" }</span></code></pre>
       </div>
@@ -410,7 +580,7 @@
 
 <span class="c-com">201 -&gt; { "instrumentId": { "admin", "id" }, "assetCid", "updateId" }
 409 -&gt; no mint right granted yet
-500 -&gt; quota exhausted (contract-level); request approval</span></code></pre>
+500 -&gt; mint quota for this window exhausted (contract); minting above it needs arCCade's approval</span></code></pre>
       </div>
     </div>
 
@@ -434,7 +604,8 @@
 <pre><code>{ <span class="c-key">"registryCid"</span>: <span class="c-str">"00d37a98..."</span>, <span class="c-key">"assetCid"</span>: <span class="c-str">"00b480a9..."</span>,
   <span class="c-key">"sender"</span>: <span class="c-str">"alice::1220ab..."</span>, <span class="c-key">"receiver"</span>: <span class="c-str">"bob::1220cd..."</span>,
   <span class="c-key">"localId"</span>: <span class="c-str">"sword-of-dawn#4a91c8f2"</span>, <span class="c-key">"amount"</span>: <span class="c-str">"1.0"</span>,
-  <span class="c-key">"settlementId"</span>: <span class="c-str">"trade-8814"</span>, <span class="c-key">"legId"</span>: <span class="c-str">"offer"</span> }
+  <span class="c-key">"settlementId"</span>: <span class="c-str">"trade-8814"</span>, <span class="c-key">"legId"</span>: <span class="c-str">"offer"</span>,
+  <span class="c-key">"allocateBeforeSeconds"</span>: <span class="c-str">600</span>, <span class="c-key">"settleBeforeSeconds"</span>: <span class="c-str">1800</span> }   <span class="c-com">// defaults shown</span>
 
 <span class="c-com">201 -&gt; { "allocationCid", "legId", "instrumentId", "updateId" }</span></code></pre>
       </div>
@@ -447,22 +618,26 @@
       <div class="ep-body">
         <p class="muted" style="font-size:14px">
           Two legs minimum  -  a one-sided gift cannot be written with this primitive. Set
-          <code>taker</code> to <code>null</code> for an open offer.
+          <code>taker</code> to <code>null</code> for an open offer. Every leg's instrument must be in
+          your namespace.
         </p>
 <pre><code>{ <span class="c-key">"tradeId"</span>: <span class="c-str">"trade-8814"</span>, <span class="c-key">"maker"</span>: <span class="c-str">"alice::..."</span>, <span class="c-key">"taker"</span>: <span class="c-str">"bob::..."</span>,
   <span class="c-key">"tradeDigest"</span>: <span class="c-str">"&lt;64-char sha256&gt;"</span>,
+  <span class="c-key">"expiresInSeconds"</span>: <span class="c-str">600</span>, <span class="c-key">"settleInSeconds"</span>: <span class="c-str">1800</span>,   <span class="c-com">// defaults shown</span>
   <span class="c-key">"legs"</span>: {
     <span class="c-key">"offer"</span>: { <span class="c-key">"sender"</span>: <span class="c-str">"alice::..."</span>, <span class="c-key">"receiver"</span>: <span class="c-str">"bob::..."</span>,
                 <span class="c-key">"instrumentId"</span>: {...}, <span class="c-key">"amount"</span>: <span class="c-str">"1.0"</span> },
     <span class="c-key">"ask"</span>:   { <span class="c-key">"sender"</span>: <span class="c-str">"bob::..."</span>, <span class="c-key">"receiver"</span>: <span class="c-str">"alice::..."</span>,
-                <span class="c-key">"instrumentId"</span>: {...}, <span class="c-key">"amount"</span>: <span class="c-str">"300.0"</span> } } }</code></pre>
+                <span class="c-key">"instrumentId"</span>: {...}, <span class="c-key">"amount"</span>: <span class="c-str">"300.0"</span> } } }
+
+<span class="c-com">201 -&gt; { "tradeId", "proposalCid", "updateId" }</span></code></pre>
       </div>
     </div>
 
     <div class="ep">
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/trade/:proposalCid/accept</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
       <div class="ep-body">
-        <p class="muted" style="font-size:14px">Body <code>{ "acceptor": "bob::..." }</code>. Returns <code>tradeCid</code>. Fails after the proposal expires.</p>
+        <p class="muted" style="font-size:14px">Body <code>{ "acceptor": "bob::..." }</code>. Returns <code>{ "tradeCid", "updateId" }</code>. Fails after the proposal expires.</p>
       </div>
     </div>
 
@@ -477,21 +652,37 @@
   <span class="c-key">"parties"</span>: [<span class="c-str">"alice::..."</span>, <span class="c-str">"bob::..."</span>] }
 
 <span class="c-com">200 -&gt; { "settled": true, "updateId",
-        "created": [ { "instrumentId", "amount", "owner" } ] }</span></code></pre>
+        "created": [ { "contractId", "instrumentId", "amount", "owner" } ] }</span></code></pre>
       </div>
     </div>
 
-    <div class="prose"><h2 id="ep-cycle">Cycle</h2></div>
+    <div class="prose"><h2 id="ep-cycle">Cycle</h2>
+      <p>Slots, the participant-submitted stake and settlement, the two exits, and the reads that find a cycle again. For a player who signs with their own key, the stake and the settlement go through <a href="#ep-signed">Player-signed cycle</a> instead; everything else here applies to both.</p>
+    </div>
 
     <div class="ep">
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/venue/:venueCid/entitlements</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
       <div class="ep-body">
         <p class="muted" style="font-size:14px">
-          Issues player slots. The slot is what enforces the concurrency limit  -  a second commit on
-          a consumed slot is rejected by the ledger, not by this service.
+          Issues player slots. The venue's <code>concurrencyLimit</code> decides how many slots each
+          player gets; a second commit on a consumed slot is rejected by the ledger, not by this
+          service. Issuing again to a player who already has slots at this venue is rejected.
         </p>
-<pre><code>{ <span class="c-key">"grants"</span>: [ { <span class="c-key">"player"</span>: <span class="c-str">"alice::..."</span>, <span class="c-key">"concurrencyIndex"</span>: <span class="c-str">0</span>,
-                <span class="c-key">"tier"</span>: <span class="c-str">"silver"</span> } ] }</code></pre>
+<pre><code>{ <span class="c-key">"grants"</span>: [ { <span class="c-key">"player"</span>: <span class="c-str">"alice::..."</span>, <span class="c-key">"tier"</span>: <span class="c-str">"silver"</span> } ] }   <span class="c-com">// tier defaults to "default"</span>
+
+<span class="c-com">201 -&gt; { "venueCid", "updateId",
+        "entitlements": [ { "contractId", "player", "concurrencyIndex" } ] }
+400 -&gt; grants missing, or a grant still sends a non-zero concurrencyIndex</span></code></pre>
+        <p class="muted" style="font-size:14px">The venue's contract id changes: use the returned <code>venueCid</code> from here on.</p>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb get">GET</span><span class="path">/api/game/venue/entitlements/:party</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">A player's slots at your venues, lowest index first. No quota cost.</p>
+<pre><code><span class="c-com">200 -&gt; { "player", "entitlements": [ { "contractId", "venueId", "mode",
+        "concurrencyIndex", "tier", "nextEligibleAt", "cyclesCompleted" } ] }</span></code></pre>
       </div>
     </div>
 
@@ -499,15 +690,17 @@
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/cycle/commit</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
       <div class="ep-body">
         <p class="muted" style="font-size:14px">
-          Write 1. Fix <code>entryDigest</code> before play so entry conditions cannot be
-          retrofitted afterwards.
+          Write 1, submitted by the service for a player hosted on this participant. Fix
+          <code>entryDigest</code> before play so entry conditions cannot be retrofitted afterwards. On
+          a live venue the player's Canton Coin is locked and the stake committed in one transaction.
         </p>
 <pre><code>{ <span class="c-key">"entitlementCid"</span>: <span class="c-str">"002769ea..."</span>, <span class="c-key">"player"</span>: <span class="c-str">"alice::..."</span>,
   <span class="c-key">"gameCode"</span>: <span class="c-str">"yourgame-runner-v1"</span>, <span class="c-key">"cycleId"</span>: <span class="c-str">"run-3f2a..."</span>,
   <span class="c-key">"entryDigest"</span>: <span class="c-str">"&lt;64-char sha256&gt;"</span>,
-  <span class="c-key">"stakeAmount"</span>: <span class="c-str">"100.0"</span>, <span class="c-key">"lockSeconds"</span>: <span class="c-str">14400</span> }
+  <span class="c-key">"stakeAmount"</span>: <span class="c-str">"100.0"</span>, <span class="c-key">"feeAmount"</span>: <span class="c-str">"1.0"</span>, <span class="c-key">"lockSeconds"</span>: <span class="c-str">14400</span> }
 
-<span class="c-com">201 -&gt; { "cycleId", "stakeCid", "custodyTag", "lockExpiresAt", "updateId" }</span></code></pre>
+<span class="c-com">201 -&gt; { "cycleId", "stakeCid", "custodyTag", "lockExpiresAt", "mode",
+        "lockedAmulet", "inputAmount", "updateId" }   // lockedAmulet, inputAmount: live venues</span></code></pre>
       </div>
     </div>
 
@@ -515,15 +708,67 @@
       <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/cycle/:stakeCid/settle</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
       <div class="ep-body">
         <p class="muted" style="font-size:14px">
-          Write 2. If you send <code>revealedOutcome</code>, the ledger recomputes its hash and
-          rejects a mismatch. Fails before <code>minCycleSeconds</code> have elapsed.
+          Write 2. On a live venue send <code>lockedHoldingCid</code>: the contract checks the lock
+          against the stake and the unlock runs in the same transaction. Without it only a dry-run
+          venue settles. If you send <code>revealedOutcome</code> or <code>revealedEntry</code>, the
+          ledger recomputes the hash and rejects a mismatch.
         </p>
 <pre><code>{ <span class="c-key">"player"</span>: <span class="c-str">"alice::..."</span>, <span class="c-key">"disposition"</span>: <span class="c-str">"ReturnedInFull"</span>,
-  <span class="c-key">"returnedAmount"</span>: <span class="c-str">"100.0"</span>, <span class="c-key">"forfeitedAmount"</span>: <span class="c-str">"0.0"</span>,
+  <span class="c-key">"returnedAmount"</span>: <span class="c-str">"100.0"</span>, <span class="c-key">"forfeitedAmount"</span>: <span class="c-str">"0.0"</span>, <span class="c-key">"payoutAmount"</span>: <span class="c-str">"0.0"</span>,
   <span class="c-key">"outcomeDigest"</span>: <span class="c-str">"&lt;64-char sha256&gt;"</span>,
-  <span class="c-key">"revealedOutcome"</span>: <span class="c-str">"{\"score\":4200,\"result\":\"win\"}"</span> }
+  <span class="c-key">"revealedOutcome"</span>: <span class="c-str">"{\"score\":4200,\"result\":\"win\"}"</span>,
+  <span class="c-key">"lockedHoldingCid"</span>: <span class="c-str">"00a1f3..."</span> }
 
-<span class="c-com">200 -&gt; { "settled": true, "entitlementCid", "updateId" }</span></code></pre>
+<span class="c-com">200 -&gt; { "settled": true, "entitlementCid", "unlockedAmulet", "updateId" }</span></code></pre>
+        <p class="muted" style="font-size:14px">
+          The contract requires <code>returnedAmount + forfeitedAmount</code> to equal the stake, allows
+          no forfeit on a time-locked stake, caps <code>payoutAmount</code> at the policy's
+          <code>maxPayoutAmount</code>, and rejects settlement outside
+          <code>minCycleSeconds</code>..<code>maxCycleSeconds</code> of the commit.
+        </p>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/cycle/:stakeCid/abort</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">
+          Closes a cycle without counting it. There is no minimum duration  -  this is the way out of
+          a cycle that should not have started. The slot comes back after the policy's
+          <code>abortCooldownSeconds</code>. Send <code>lockedHoldingCid</code> to unlock in the same
+          transaction; otherwise the lock stays until it expires.
+        </p>
+<pre><code>{ <span class="c-key">"player"</span>: <span class="c-str">"alice::..."</span>, <span class="c-key">"reason"</span>: <span class="c-str">"client crashed"</span>, <span class="c-key">"lockedHoldingCid"</span>: <span class="c-str">"00a1f3..."</span> }
+
+<span class="c-com">200 -&gt; { "aborted": true, "reason", "entitlementCid", "unlockedAmulet", "updateId" }</span></code></pre>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/cycle/:stakeCid/expire</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">
+          Closes an unsettled cycle once <code>lockExpiresAt</code> has passed, authorised by the player
+          alone: neither arCCade nor the venue is needed on the ledger. With
+          <code>lockedHoldingCid</code> the funds return to the player in the same transaction.
+        </p>
+<pre><code>{ <span class="c-key">"player"</span>: <span class="c-str">"alice::..."</span>, <span class="c-key">"lockedHoldingCid"</span>: <span class="c-str">"00a1f3..."</span> }
+
+<span class="c-com">200 -&gt; { "expired": true, "entitlementCid", "unlockedAmulet", "updateId" }</span></code></pre>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb get">GET</span><span class="path">/api/game/cycle/open/:party</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">
+          A player's open cycles at your venues, each with the lock that belongs to it. No quota cost.
+          This is where recovery starts: a stake listed here was committed and has not been closed.
+        </p>
+<pre><code><span class="c-com">200 -&gt; { "player", "openCycles",
+        "cycles": [ { "stakeCid", "cycleId", "venueId", "gameCode", "custodyTag",
+                      "lockedAmulet", "concurrencyIndex", "committedAt",
+                      "stakeAmount", "lockExpiresAt" } ] }</span></code></pre>
       </div>
     </div>
 
@@ -532,29 +777,150 @@
       <div class="ep-body">
         <p class="muted" style="font-size:14px">
           Reads the settlement out of the transaction's exercise node. This data does not appear in
-          the default ledger event stream  -  this endpoint is how you get it.
+          the default ledger event stream  -  this endpoint is how you get it. Aborts and expiries are
+          not settlements and return <code>404</code>.
         </p>
-<pre><code><span class="c-com">200 -&gt; { "choice": "GameStake_Settle", "disposition",
+<pre><code><span class="c-com">200 -&gt; { "choice": "GameStake_Settle", "consuming", "disposition",
         "returnedAmount", "forfeitedAmount", "payoutAmount",
         "outcomeDigest", "revealedOutcome" }</span></code></pre>
       </div>
     </div>
 
     <div class="prose">
+      <h2 id="ep-signed">Player-signed cycle</h2>
+      <p>
+        For a player who holds their own key. Each write takes two calls: a prepare that returns a hash
+        for the wallet to sign, and an execute that submits the signature. The prepared transaction
+        itself never leaves the service, so what the player signs is exactly what is submitted.
+      </p>
+      <div class="note">
+        <span class="h">What to sign</span>
+        Base64-decode <code>preparedTransactionHash</code>, sign those bytes with Ed25519 using the
+        player party's key, and send the signature base64-encoded. Do not send <code>signedBy</code>:
+        the service derives the key fingerprint from the party id (the part after <code>::</code>)
+        and rejects a body that names one.
+      </div>
+<pre><code><span class="c-key">import</span> nacl <span class="c-key">from</span> <span class="c-str">'tweetnacl'</span>
+
+<span class="c-key">const</span> sig = nacl.sign.<span class="c-fn">detached</span>(Buffer.<span class="c-fn">from</span>(preparedTransactionHash, <span class="c-str">'base64'</span>), secretKey)
+<span class="c-key">const</span> body = { requestId, signature: Buffer.<span class="c-fn">from</span>(sig).<span class="c-fn">toString</span>(<span class="c-str">'base64'</span>) }</code></pre>
+      <p>
+        A prepared request is single-use and lives 5 minutes. It is consumed before submission, so
+        an execute that fails needs a fresh prepare. The offer each prepare creates also expires on
+        the ledger after 5 minutes.
+      </p>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/cycle/offer/prepare</span><span class="spacer"></span><span class="chip tenant dot">tenant</span><span class="chip player dot">player signs next</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">
+          Prepares write 1. The fee and the lock come from the slot's policy, not from the request:
+          the fee is <code>minPlatformFee</code> and the lock runs <code>minLockSeconds</code> plus 600
+          seconds. The player is an observer of the offer, so a wallet can read these terms from the
+          ledger instead of trusting this response.
+        </p>
+<pre><code>{ <span class="c-key">"entitlementCid"</span>: <span class="c-str">"002769ea..."</span>, <span class="c-key">"player"</span>: <span class="c-str">"alice::..."</span>,
+  <span class="c-key">"gameCode"</span>: <span class="c-str">"yourgame-runner-v1"</span>, <span class="c-key">"cycleId"</span>: <span class="c-str">"run-3f2a..."</span>,
+  <span class="c-key">"entryDigest"</span>: <span class="c-str">"&lt;64-char sha256&gt;"</span>, <span class="c-key">"stakeAmount"</span>: <span class="c-str">"100.0"</span> }
+
+<span class="c-com">200 -&gt; { "requestId", "preparedTransactionHash", "offerCid", "cycleId",
+        "stakeAmount", "feeAmount", "lockExpiresAt", "expiresInSeconds": 300 }
+403 -&gt; the entitlement belongs to another player, or to another tenant's venue
+404 -&gt; entitlement not found</span></code></pre>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/cycle/offer/execute</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">
+          Submits write 1 with the player's signature: the Canton Coin lock, the platform fee and the
+          stake commit land in one transaction.
+        </p>
+<pre><code>{ <span class="c-key">"requestId"</span>: <span class="c-str">"p9Wk..."</span>, <span class="c-key">"signature"</span>: <span class="c-str">"&lt;base64 Ed25519&gt;"</span> }
+
+<span class="c-com">201 -&gt; { "cycleId", "stakeCid", "custodyTag", "lockExpiresAt", "mode",
+        "lockedAmulet", "updateId", "contractsResolved" }
+400 -&gt; requestId or signature missing, or signedBy present
+404 -&gt; prepared request unknown or expired: prepare again</span></code></pre>
+        <p class="muted" style="font-size:14px">
+          <code>201</code> with <code>"contractsResolved": false</code> means the ledger accepted the
+          write but the new contracts were not visible within 10 seconds. <strong>Do not
+          resubmit</strong>; find the stake with <code>GET /cycle/open/:party</code>.
+          <code>updateId</code> can be <code>null</code> when the ledger's completion was not seen in
+          time; the write itself is unaffected.
+        </p>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/cycle/:stakeCid/settle/offer/prepare</span><span class="spacer"></span><span class="chip tenant dot">tenant</span><span class="chip player dot">player signs next</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">
+          Prepares write 2. The body is the same as <code>POST /cycle/:stakeCid/settle</code>, and
+          <code>lockedHoldingCid</code> is required: without a lock there is nothing for the player to
+          sign, and the settlement belongs on the participant-submitted route.
+        </p>
+<pre><code>{ <span class="c-key">"player"</span>: <span class="c-str">"alice::..."</span>, <span class="c-key">"disposition"</span>: <span class="c-str">"ReturnedInFull"</span>,
+  <span class="c-key">"returnedAmount"</span>: <span class="c-str">"100.0"</span>, <span class="c-key">"outcomeDigest"</span>: <span class="c-str">"&lt;64-char sha256&gt;"</span>,
+  <span class="c-key">"lockedHoldingCid"</span>: <span class="c-str">"00a1f3..."</span> }
+
+<span class="c-com">200 -&gt; { "requestId", "preparedTransactionHash", "stakeCid",
+        "lockedHoldingCid", "cycleId", "offerCid", "expiresInSeconds": 300 }</span></code></pre>
+        <p class="muted" style="font-size:14px">Compare the echoed <code>stakeCid</code> and <code>lockedHoldingCid</code> with the ones you hold before asking the player to sign.</p>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head"><span class="verb">POST</span><span class="path">/api/game/cycle/settle/execute</span><span class="spacer"></span><span class="chip tenant dot">tenant</span></div>
+      <div class="ep-body">
+        <p class="muted" style="font-size:14px">
+          Submits write 2 with the player's signature: the settlement and the unlock land in one
+          transaction, and the slot comes back.
+        </p>
+<pre><code>{ <span class="c-key">"requestId"</span>: <span class="c-str">"Qz3r..."</span>, <span class="c-key">"signature"</span>: <span class="c-str">"&lt;base64 Ed25519&gt;"</span> }
+
+<span class="c-com">200 -&gt; { "settled": true, "stakeCid", "cycleId", "entitlementCid",
+        "unlockedAmulet": null, "updateId", "contractsResolved" }</span></code></pre>
+        <p class="muted" style="font-size:14px">
+          <code>unlockedAmulet</code> is always <code>null</code>: nothing on the returned coin ties it to
+          this cycle, so read the player's balance from their wallet. With
+          <code>"contractsResolved": false</code> the stake's archival was not confirmed in time. Check
+          <code>GET /cycle/open/:party</code>; if the settlement did not land nothing is lost, because
+          the player can expire the cycle once the lock runs out.
+        </p>
+      </div>
+    </div>
+
+    <div class="prose">
+      <div class="note warn">
+        <span class="h">Routes you should not use</span>
+        <code>POST /cycle/commit/prepare</code> with its <code>POST /cycle/commit/execute</code>, and
+        <code>POST /cycle/:stakeCid/settle/prepare</code>, are still registered, but a Canton
+        participant rejects what they prepare (<code>FAILED_TO_PREPARE_TRANSACTION</code>): each puts
+        two commands and several authorising parties into one interactive submission. The offer
+        routes above replace them.
+      </div>
+
       <h2 id="errors">Errors</h2>
-      <p>Every error returns <code>{ "error": "..." }</code>, some with <code>details</code> carrying the ledger's own code.</p>
+      <p>
+        Every error returns <code>{ "error": "..." }</code>, some with <code>details</code> carrying the
+        ledger's own response. Branch on the status code; the text is for people and may change.
+      </p>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th>Code</th><th>Meaning</th><th>What to do</th></tr></thead>
           <tbody>
-            <tr><td class="mono">400</td><td>Malformed body, bad digest length, unknown party</td><td>Fix and resend. Never retry unchanged.</td></tr>
+            <tr><td class="mono">400</td><td>Malformed body, bad digest, unknown tenant party, <code>signedBy</code> in an execute body, policy outside bounds (<code>violations</code> lists each)</td><td>Fix and resend. Never retry unchanged.</td></tr>
             <tr><td class="mono">401</td><td>Missing or invalid key</td><td>Do not retry. Same response for unknown tenants.</td></tr>
-            <tr><td class="mono">403</td><td>Namespace violation, or tenant suspended</td><td>Do not retry. The message names the offending id.</td></tr>
-            <tr><td class="mono">404</td><td>Contract or tenant not found</td><td>Re-read state; a cached id is likely consumed.</td></tr>
+            <tr><td class="mono">403</td><td>Namespace violation, or tenant suspended</td><td>Do not retry. The body names the offending id.</td></tr>
+            <tr><td class="mono">404</td><td>Contract, tenant or venue not found; prepared request unknown or expired</td><td>Re-read state; a cached id is likely consumed. For a prepared request, prepare again.</td></tr>
             <tr><td class="mono">409</td><td>Tenant exists, or no mint right yet</td><td>Resolve the prerequisite first.</td></tr>
-            <tr><td class="mono">429</td><td>Quota exhausted</td><td>Wait until <code>X-Quota-Reset</code>. Backoff will not help before then.</td></tr>
-            <tr><td class="mono">500</td><td>Ledger rejected the command</td><td>Read <code>details.cause</code>  -  usually an assertion. See below.</td></tr>
-            <tr><td class="mono">503</td><td>Registry not configured</td><td>Operator action needed; not retryable by you.</td></tr>
+            <tr><td class="mono">429</td><td>Quota exhausted. Body carries <code>remaining</code> and <code>resetAt</code></td><td>Wait until <code>X-Quota-Reset</code>. Backoff will not help before then.</td></tr>
+            <tr><td class="mono">500</td><td>Ledger rejected the command, an upstream call failed, or the ledger request timed out</td><td>Read <code>details</code>. A timeout may still have committed: read state before retrying.</td></tr>
+            <tr><td class="mono">502</td><td><code>GET /report/period</code> could not read part of the range</td><td>Retry, or use <code>transport=stream</code>.</td></tr>
+            <tr><td class="mono">503</td><td>Registry not configured, or the report's page budget ran out</td><td>For the registry, operator action is needed. For the report, use <code>transport=stream</code>.</td></tr>
           </tbody>
         </table>
       </div>
@@ -565,9 +931,16 @@
           <tbody>
             <tr><td class="mono">UNKNOWN_INFORMEES</td><td>A party in the command does not exist on this participant.</td></tr>
             <tr><td class="mono">CONTRACT_NOT_FOUND</td><td>The id was already consumed by an earlier write.</td></tr>
-            <tr><td class="mono">basim kotasi doldu</td><td>Mint quota exhausted for this window; request approved minting.</td></tr>
-            <tr><td class="mono">cycle has not run...</td><td>Settlement attempted before <code>minCycleSeconds</code>.</td></tr>
-            <tr><td class="mono">digest mismatch</td><td>The revealed document does not hash to the committed digest.</td></tr>
+            <tr><td class="mono">dongu asgari suresini doldurmadi</td><td>Settlement attempted before <code>minCycleSeconds</code>.</td></tr>
+            <tr><td class="mono">dongu azami sureyi asti</td><td>Settlement attempted after <code>maxCycleSeconds</code>. Abort it, or expire it once the lock runs out.</td></tr>
+            <tr><td class="mono">giris / sonuc belgesi saklanan digest ile uyusmuyor</td><td>The revealed entry or outcome document does not hash to the committed digest.</td></tr>
+            <tr><td class="mono">custody kaniti zorunlu ama holding referansi verilmedi</td><td>A live venue was settled without <code>lockedHoldingCid</code>.</td></tr>
+            <tr><td class="mono">oyuncu cooldown suresinde</td><td>The slot is cooling down after its last cycle; see <code>nextEligibleAt</code>.</td></tr>
+            <tr><td class="mono">kilit suresi henuz dolmadi</td><td>Expire attempted before <code>lockExpiresAt</code>.</td></tr>
+            <tr><td class="mono">teklifin suresi doldu</td><td>A stake offer was signed after its 5 minutes. Prepare again.</td></tr>
+            <tr><td class="mono">kapanis teklifinin suresi doldu</td><td>A settlement offer was signed after its 5 minutes. Prepare again.</td></tr>
+            <tr><td class="mono">oyuncuya bu venue'da zaten slot verilmis</td><td>This player already has slots at this venue.</td></tr>
+            <tr><td class="mono">basim kotasi doldu (...)</td><td>Mint quota for this window exhausted; minting above it needs arCCade's approval.</td></tr>
           </tbody>
         </table>
       </div>
@@ -584,16 +957,18 @@
             <tr><td>mint</td><td><code>GET /assets/:party</code>  -  look for the instrument id</td></tr>
             <tr><td>allocate</td><td>Re-read the asset; if it is gone, the allocation exists</td></tr>
             <tr><td>trade settle</td><td><code>GET /assets/:party</code> for both parties</td></tr>
-            <tr><td>cycle commit</td><td>The entitlement is consumed if the commit landed</td></tr>
-            <tr><td>cycle settle</td><td><code>GET /cycle/:updateId/outcome</code></td></tr>
+            <tr><td>cycle commit or offer execute</td><td><code>GET /cycle/open/:party</code>  -  the stake is listed if the write landed</td></tr>
+            <tr><td>cycle settle or settle execute</td><td><code>GET /cycle/open/:party</code>  -  the stake is gone if the write landed; then <code>GET /cycle/:updateId/outcome</code></td></tr>
+            <tr><td>anchor</td><td><code>GET /venue/anchors</code>  -  a second call for the same period returns the existing anchor</td></tr>
+            <tr><td>a prepare</td><td>Nothing to check. Prepare again; the unused offer expires on its own.</td></tr>
           </tbody>
         </table>
       </div>
       <div class="note warn">
         <span class="h">Do not cache contract ids across writes</span>
         Most writes consume the contract they act on and create a replacement. A cached
-        <code>mintRightCid</code> or <code>entitlementCid</code> goes stale after one use. The API
-        re-reads these for you; if you build ledger commands directly, do the same.
+        <code>mintRightCid</code>, <code>entitlementCid</code> or <code>venueCid</code> goes stale after
+        one use. The API re-reads these for you; if you build ledger commands directly, do the same.
       </div>
 
       <h2 id="types">Types &amp; encoding</h2>
@@ -601,13 +976,18 @@
         <table>
           <thead><tr><th>Field</th><th>Type</th><th>Rule</th></tr></thead>
           <tbody>
-            <tr><td class="mono">amount</td><td>string</td><td>Decimal string. Fractional JSON numbers are rejected, not rounded.</td></tr>
+            <tr><td class="mono">amount</td><td>string</td><td>Decimal string. Never a JSON number.</td></tr>
             <tr><td class="mono">*Digest</td><td>string</td><td>Exactly 64 lowercase hex characters.</td></tr>
             <tr><td class="mono">cycleId / tradeId</td><td>string</td><td>&lt;= 64 chars, no <code>:</code> or <code>|</code>. Generate, never reuse.</td></tr>
             <tr><td class="mono">localId</td><td>string</td><td><code>[a-z0-9._-]</code>, plus optional <code>#instance</code>.</td></tr>
             <tr><td class="mono">instrumentId</td><td>object</td><td><code>{ admin, id }</code>  -  <code>id</code> is <code>tenant/local</code>.</td></tr>
             <tr><td class="mono">*Cid</td><td>string</td><td>Contract id from a prior response. Opaque; never construct one.</td></tr>
-            <tr><td class="mono">disposition</td><td>enum</td><td><code>ReturnedInFull</code>, <code>ReturnedWithForfeit</code>, <code>ForfeitedInFull</code></td></tr>
+            <tr><td class="mono">disposition</td><td>enum</td><td><code>ReturnedInFull</code>, <code>ReturnedWithForfeit</code>, <code>ForfeitedInFull</code> when settling. Report rows use labels such as <code>returned-in-full</code>.</td></tr>
+            <tr><td class="mono">policy integers</td><td>string</td><td>Seconds and counts as integer strings, e.g. <code>"14400"</code>.</td></tr>
+            <tr><td class="mono">*Micros</td><td>string</td><td>Integer microseconds since the Unix epoch.</td></tr>
+            <tr><td class="mono">requestId</td><td>string</td><td>Opaque, single-use, valid 5 minutes.</td></tr>
+            <tr><td class="mono">preparedTransactionHash</td><td>string</td><td>Base64. Decode before signing.</td></tr>
+            <tr><td class="mono">signature</td><td>string</td><td>Base64 Ed25519 signature over the decoded hash.</td></tr>
           </tbody>
         </table>
       </div>
@@ -619,13 +999,36 @@
           <thead><tr><th>Rule</th><th>Enforced by</th><th>Value</th></tr></thead>
           <tbody>
             <tr><td>Namespace isolation</td><td>API + contract</td><td class="num">tenant/ prefix</td></tr>
-            <tr><td>Write quota</td><td>API</td><td class="num">60 / 60 s</td></tr>
-            <tr><td>Mint quota</td><td>Contract</td><td class="num">sliding window</td></tr>
+            <tr><td>Write quota</td><td>API</td><td class="num">60 per 60 s, per tenant</td></tr>
+            <tr><td>Venue policy bounds</td><td>API</td><td class="num">table below</td></tr>
+            <tr><td>Mint quota</td><td>Contract</td><td class="num">per mint right</td></tr>
             <tr><td>Concurrent cycles</td><td>Contract</td><td class="num">slot token</td></tr>
             <tr><td>Lock &amp; cycle duration</td><td>Contract</td><td class="num">ledger time only</td></tr>
+            <tr><td>Lock outlasts the claim window</td><td>API, on policy update</td><td class="num">minLock &gt;= maxCycle</td></tr>
+            <tr><td>Offer validity</td><td>Contract</td><td class="num">300 s</td></tr>
+            <tr><td>Prepared request</td><td>API</td><td class="num">300 s, single use</td></tr>
             <tr><td>Unique asset amount</td><td>API + contract</td><td class="num">exactly 1</td></tr>
             <tr><td>Trade atomicity</td><td>Canton engine</td><td class="num">all legs or none</td></tr>
             <tr><td>Burn</td><td>Contract</td><td class="num">owner + registry</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Venue policy bounds</h3>
+      <p>Checked for tenant keys on <code>POST /venue/init</code> and for everyone on <code>PUT /venue/:venueId/policy</code>. A venue outside them needs arCCade.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Field</th><th>Bound</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">maxStakeAmount</td><td class="num">&lt;= 1000</td></tr>
+            <tr><td class="mono">minPlatformFee</td><td class="num">&lt;= 10</td></tr>
+            <tr><td class="mono">maxPayoutAmount</td><td class="num">&lt;= 1000</td></tr>
+            <tr><td class="mono">minLockSeconds</td><td class="num">&gt;= 300</td></tr>
+            <tr><td class="mono">maxLockSeconds</td><td class="num">&lt;= 691200 (8 days)</td></tr>
+            <tr><td class="mono">minCycleSeconds</td><td class="num">&gt;= 60</td></tr>
+            <tr><td class="mono">maxCycleSeconds</td><td class="num">&lt;= 604800 (7 days)</td></tr>
+            <tr><td class="mono">concurrencyLimit</td><td class="num">&lt;= 5</td></tr>
+            <tr><td class="mono">cooldownSeconds</td><td class="num">&gt;= 0</td></tr>
+            <tr><td class="mono">abortCooldownSeconds</td><td class="num">&gt;= 60</td></tr>
           </tbody>
         </table>
       </div>
@@ -638,6 +1041,11 @@
       <p>
         The HTTP API is sufficient on its own. Use the library when you need the canonical encoding
         locally  -  to compute a digest before sending it, or to verify one a player disputes.
+        <code>npm install @arccade/game-sdk</code> gives you the encoding, cycle ids and the cycle
+        command builders. Version 1.6.0 adds the venue policy document, the period anchor and
+        settlement invariants; it is in the
+        <a href="https://github.com/arCCade/arccade-game-sdk">repository</a> and its npm release is
+        pending.
       </p>
 <pre><code><span class="c-key">import</span> { newCycleId, canonDocument, canonText, canonDecimal, textDigest }
   <span class="c-key">from</span> <span class="c-str">'@arccade/game-sdk'</span>
@@ -659,11 +1067,17 @@
 <pre><code>curl https://yourgame.example/cycles/8814/entry.json | sha256sum
 <span class="c-com"># matches entryDigest on the ledger</span></code></pre>
       <div class="note">
-        <span class="h">Byte-identical across three implementations</span>
-        The encoding exists in Daml, JavaScript and Python, with a golden-vector test that fails the
-        build if any drifts. Lengths count Unicode code points  -  a Java port must use
+        <span class="h">Byte-identical across four implementations</span>
+        The encoding exists in Daml, JavaScript, Python and Java, pinned to shared test vectors that
+        fail the build if any drifts. Lengths count Unicode code points  -  a new port must use
         <code>codePointCount</code>, never <code>String.length()</code>.
       </div>
+      <p>
+        Version 1.6.0 also brings an independent verifier for audit anchors. Given the ledger's
+        transaction trees, or your published rows, it rebuilds the root and checks it against the
+        anchor, trusting nothing arCCade published; given one row and its proof, it shows that cycle
+        is in the report.
+      </p>
 
       <h2 id="gotchas">Sharp edges</h2>
       <div class="tbl-wrap">
@@ -673,6 +1087,22 @@
             <tr>
               <td>Settlement results are not in the default event stream</td>
               <td>They live in the exercise node, visible only under <code>TRANSACTION_SHAPE_LEDGER_EFFECTS</code>. Use <code>GET /cycle/:updateId/outcome</code>.</td>
+            </tr>
+            <tr>
+              <td>An accepted write can come back without contract ids</td>
+              <td><code>201</code> or <code>200</code> with <code>"contractsResolved": false</code>. Do not resubmit; read <code>GET /cycle/open/:party</code>.</td>
+            </tr>
+            <tr>
+              <td>A venue's contract id changes</td>
+              <td>Issuing entitlements and updating the policy both replace the venue contract. Read <code>GET /venues</code> before using a <code>venueCid</code>.</td>
+            </tr>
+            <tr>
+              <td>Policy changes do not reach issued slots</td>
+              <td>A slot keeps the policy it was issued under, and each cycle keeps the policy it committed under. A new fee reaches players on slots issued after the change.</td>
+            </tr>
+            <tr>
+              <td>A timeout is not a failure</td>
+              <td>A large anchor or a slow commit can land after the request gives up. Read state before retrying.</td>
             </tr>
             <tr>
               <td>Tenant parties are validated at registration</td>
@@ -695,9 +1125,9 @@
       </div>
 
       <footer>
-        arCCade Game SDK v1.3.0. Daml package vetted on Canton TestNet. Assets follow CIP-0056,
-        the Canton Network Token Standard. Every endpoint documented here is verified end-to-end
-        against a live participant.
+        arCCade Game SDK v1.6.0. The API at sdk.arccade.io runs against Canton TestNet. The
+        player-signed stake and settlement documented here are the path arCCade's own games use on
+        TestNet and MainNet. Assets follow CIP-0056, the Canton Network Token Standard.
       </footer>
     </div>
   </main>
