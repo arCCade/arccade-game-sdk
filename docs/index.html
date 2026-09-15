@@ -225,6 +225,7 @@
         <table>
           <thead><tr><th>Question</th><th>Answer</th></tr></thead>
           <tbody>
+            <tr><td>Is there a machine-readable index?</td><td>Yes. <code>GET /api/game</code> needs no key and lists every route by the credential it takes, including the closed ones.</td></tr>
             <tr><td>Are writes idempotent?</td><td>No. Retrying a 5xx may double-write. See <a href="#idempotency">Idempotency</a>.</td></tr>
             <tr><td>Can I discover state?</td><td>Yes. <code>GET /assets/:party</code>, <code>GET /cycle/open/:party</code>, <code>GET /venue/entitlements/:party</code>, <code>GET /venues</code> and <code>GET /cycle/:updateId/outcome</code> cost no quota and are safe to poll.</td></tr>
             <tr><td>Is there a dry run?</td><td><code>POST /preflight</code> checks instrument ids against isolation rules without writing. For whole cycles, run a dry-run venue.</td></tr>
@@ -417,12 +418,15 @@
   <span class="c-key">"shardCapacity"</span>: <span class="c-str">64</span> }                              <span class="c-com">// instrumentId defaults to Canton Coin</span>
 
 <span class="c-com">201 -&gt; { "venueId", "mode", "shardCapacity", "venueCid", "updateId" }
-400 -&gt; dry-run venueId without "dryrun-", or policy outside bounds: { "violations": [...] }
+400 -&gt; dry-run venueId without "dryrun-", policy outside bounds ({ "violations": [...] }),
+       or minLockSeconds below maxCycleSeconds
 403 -&gt; venueId outside your namespace</span></code></pre>
         <p class="muted" style="font-size:14px">
-          Send the whole policy. With a tenant key the omitted fields fall back to defaults that sit
-          below the bounds  -  <code>minLockSeconds</code> 60 and <code>minCycleSeconds</code> 10  -  and
-          the request is rejected. Bounds are listed in <a href="#limits">Enforced limits</a>.
+          Omitted policy fields take defaults inside the bounds, among them
+          <code>minLockSeconds</code> 7200 and <code>minCycleSeconds</code> 60. With a tenant key,
+          <code>minLockSeconds</code> must also be at least <code>maxCycleSeconds</code>, so a lock never
+          expires while a cycle can still be settled. Bounds are listed in
+          <a href="#limits">Enforced limits</a>.
         </p>
       </div>
     </div>
@@ -630,7 +634,9 @@
     <span class="c-key">"ask"</span>:   { <span class="c-key">"sender"</span>: <span class="c-str">"bob::..."</span>, <span class="c-key">"receiver"</span>: <span class="c-str">"alice::..."</span>,
                 <span class="c-key">"instrumentId"</span>: {...}, <span class="c-key">"amount"</span>: <span class="c-str">"300.0"</span> } } }
 
-<span class="c-com">201 -&gt; { "tradeId", "proposalCid", "updateId" }</span></code></pre>
+<span class="c-com">201 -&gt; { "tradeId", "proposalCid", "updateId" }
+400 -&gt; a leg without instrumentId
+403 -&gt; a leg's instrument outside your namespace; "leg" names it</span></code></pre>
       </div>
     </div>
 
@@ -777,8 +783,8 @@
       <div class="ep-body">
         <p class="muted" style="font-size:14px">
           Reads the settlement out of the transaction's exercise node. This data does not appear in
-          the default ledger event stream  -  this endpoint is how you get it. Aborts and expiries are
-          not settlements and return <code>404</code>.
+          the default ledger event stream  -  this endpoint is how you get it. Only settlements at your
+          venues are returned; anything else, including aborts and expiries, returns <code>404</code>.
         </p>
 <pre><code><span class="c-com">200 -&gt; { "choice": "GameStake_Settle", "consuming", "disposition",
         "returnedAmount", "forfeitedAmount", "payoutAmount",
@@ -843,7 +849,7 @@
 <span class="c-com">201 -&gt; { "cycleId", "stakeCid", "custodyTag", "lockExpiresAt", "mode",
         "lockedAmulet", "updateId", "contractsResolved" }
 400 -&gt; requestId or signature missing, or signedBy present
-404 -&gt; prepared request unknown or expired: prepare again</span></code></pre>
+404 -&gt; prepared request unknown, expired, or prepared with another tenant's key: prepare again</span></code></pre>
         <p class="muted" style="font-size:14px">
           <code>201</code> with <code>"contractsResolved": false</code> means the ledger accepted the
           write but the new contracts were not visible within 10 seconds. <strong>Do not
@@ -895,12 +901,12 @@
 
     <div class="prose">
       <div class="note warn">
-        <span class="h">Routes you should not use</span>
-        <code>POST /cycle/commit/prepare</code> with its <code>POST /cycle/commit/execute</code>, and
-        <code>POST /cycle/:stakeCid/settle/prepare</code>, are still registered, but a Canton
-        participant rejects what they prepare (<code>FAILED_TO_PREPARE_TRANSACTION</code>): each puts
-        two commands and several authorising parties into one interactive submission. The offer
-        routes above replace them.
+        <span class="h">Closed routes</span>
+        <code>POST /cycle/commit/prepare</code>, <code>POST /cycle/commit/execute</code> and
+        <code>POST /cycle/:stakeCid/settle/prepare</code> return <code>410</code> with the route to use
+        in <code>use</code>. Each put two commands and several authorising parties into one
+        interactive submission, which a Canton participant rejects
+        (<code>FAILED_TO_PREPARE_TRANSACTION</code>). The offer routes above replace them.
       </div>
 
       <h2 id="errors">Errors</h2>
@@ -917,6 +923,7 @@
             <tr><td class="mono">403</td><td>Namespace violation, or tenant suspended</td><td>Do not retry. The body names the offending id.</td></tr>
             <tr><td class="mono">404</td><td>Contract, tenant or venue not found; prepared request unknown or expired</td><td>Re-read state; a cached id is likely consumed. For a prepared request, prepare again.</td></tr>
             <tr><td class="mono">409</td><td>Tenant exists, or no mint right yet</td><td>Resolve the prerequisite first.</td></tr>
+            <tr><td class="mono">410</td><td>Route closed. <code>use</code> names its replacement</td><td>Switch to that route.</td></tr>
             <tr><td class="mono">429</td><td>Quota exhausted. Body carries <code>remaining</code> and <code>resetAt</code></td><td>Wait until <code>X-Quota-Reset</code>. Backoff will not help before then.</td></tr>
             <tr><td class="mono">500</td><td>Ledger rejected the command, an upstream call failed, or the ledger request timed out</td><td>Read <code>details</code>. A timeout may still have committed: read state before retrying.</td></tr>
             <tr><td class="mono">502</td><td><code>GET /report/period</code> could not read part of the range</td><td>Retry, or use <code>transport=stream</code>.</td></tr>
