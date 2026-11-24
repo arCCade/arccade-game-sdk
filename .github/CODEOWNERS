@@ -1,0 +1,27 @@
+# CODEOWNERS — changes to these paths need a review by @alituzun (added 2026-11-24, after the 11-23 wallet incident).
+# Takes effect once main and release/mainnet-* carry a ruleset with "Require review from Code Owners"
+# (needs the org on GitHub Team; on Free, private repos cannot enforce it). Patterns follow .gitignore
+# rules and the LAST matching line wins, so keep the catch-alls at the top.
+
+# Supply chain, CI, secrets templates and this file (every repo)
+/.github/                  @alituzun
+**/package.json            @alituzun
+**/package-lock.json       @alituzun
+**/yarn.lock               @alituzun
+**/pnpm-lock.yaml          @alituzun
+**/pom.xml                 @alituzun
+/mvnw                      @alituzun
+/.mvn/                     @alituzun
+**/.env*                   @alituzun
+**/Dockerfile              @alituzun
+**/docker-compose*.yml     @alituzun
+
+# game SDK (PUBLIC repo): release workflow and everything published
+/daml/                     @alituzun
+/js/                       @alituzun
+/java/                     @alituzun
+/python/                   @alituzun
+/tools/                    @alituzun
+/vendor/                   @alituzun
+/conformance/              @alituzun
+/test-vectors/             @alituzun
